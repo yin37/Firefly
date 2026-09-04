@@ -1,5 +1,6 @@
 ---
 hidden: true
+password: "021926"
 title: Markdown Mermaid 图表
 published: 1970-01-01
 pinned: false

@@ -4,6 +4,7 @@ published: 1970-01-01
 tags: [Markdown, 博客, 演示]
 category: 文章示例
 hidden: true
+password: "021926"
 slug: draft
 ---
 

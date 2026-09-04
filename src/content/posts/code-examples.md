@@ -1,5 +1,6 @@
 ---
 hidden: true
+password: "021926"
 title: Firefly 代码块示例
 published: 1970-01-03
 pinned: false

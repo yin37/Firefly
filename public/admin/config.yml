@@ -60,6 +60,14 @@ collections:
         widget: boolean
         default: false
         required: false
+      - label: 阅读密码（设置后读者需输入密码才能看正文）
+        name: password
+        widget: string
+        required: false
+      - label: 密码提示（可选，会显示给读者）
+        name: passwordHint
+        widget: string
+        required: false
       - label: 草稿（开了就不会发布到线上）
         name: draft
         widget: boolean
