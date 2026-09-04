@@ -1,0 +1,78 @@
+---
+import { getSortedPostsIncludingHidden } from "@utils/content-utils";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { url } from "@utils/url-utils";
+
+// 仅列出「仅自己可见」(hidden) 的文章；此页面本身没有任何公开入口
+const allPosts = await getSortedPostsIncludingHidden();
+const hiddenPosts = allPosts
+	.filter((p) => p.data.hidden === true)
+	.sort(
+		(a, b) =>
+			new Date(b.data.published).getTime() -
+			new Date(a.data.published).getTime(),
+	);
+
+function formatDate(d: Date): string {
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+}
+---
+
+<MainGridLayout title="私人书架">
+	<meta slot="head" name="robots" content="noindex, nofollow" />
+	<div class="w-full max-w-[var(--page-width)] mx-auto px-4 flex-1">
+		<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-6 mb-6">
+			<h1 class="text-3xl font-bold mb-2 transition">📖 私人书架</h1>
+			<p class="text-[var(--primary)] opacity-80 text-lg">
+				仅自己可见的文章清单 · 共 {hiddenPosts.length} 篇
+			</p>
+			<p class="opacity-60 text-sm mt-1">
+				本页没有公开入口，不会被搜索引擎收录；请把网址收藏到书签。
+			</p>
+		</div>
+
+		{hiddenPosts.length === 0 && (
+			<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-8 text-center opacity-60">
+				还没有「仅自己可见」的文章。在后台编辑文章时勾选「仅自己可见」即可添加到这里。
+			</div>
+		)}
+
+		<div class="flex flex-col gap-4">
+			{hiddenPosts.map((post) => {
+				const slug = post.id
+					.replace(/\.(md|mdx)$/, "")
+					.replace(/\/index$/, "");
+				return (
+				<a
+					href={url(`/posts/${slug}/`)}
+					class="group rounded-2xl border border-(--line-divider) bg-(--page-bg) p-5 hover:bg-[var(--btn-regular-bg-hover)] transition"
+				>
+					<div class="flex items-baseline justify-between gap-4 mb-1">
+						<h2 class="text-xl font-bold text-[var(--primary)] group-hover:text-[var(--primary)] transition">
+							{post.data.title}
+						</h2>
+						<span class="text-sm opacity-50 shrink-0">
+							{formatDate(post.data.published)}
+						</span>
+					</div>
+					{post.data.description && (
+						<p class="opacity-60 text-[15px]">{post.data.description}</p>
+					)}
+					{post.data.tags && post.data.tags.length > 0 && (
+						<div class="flex gap-2 mt-2 flex-wrap">
+							{post.data.tags.map((tag) => (
+								<span class="rounded-full bg-[var(--btn-regular-bg)] px-2.5 py-0.5 text-xs opacity-70">
+									{tag}
+								</span>
+							))}
+						</div>
+					)}
+				</a>
+				);
+			})}
+		</div>
+	</div>
+</MainGridLayout>
