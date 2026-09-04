@@ -67,6 +67,11 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
 
+// 私人文章（仅自己可见）默认使用统一阅读密码；在后台「阅读密码」字段单独填写时可覆盖
+const DEFAULT_PRIVATE_PASSWORD = "021926";
+const effectivePassword =
+	entry.data.password || (entry.data.hidden ? DEFAULT_PRIVATE_PASSWORD : "");
+
 const { remarkPluginFrontmatter } = await render(entry);
 
 const bannerPostMeta = {
@@ -212,7 +217,7 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
   postCoverImage={coverImage?.url}
   postCategory={entry.data.category || undefined}
   headings={headings}
-  encrypted={!!entry.data.password}
+  encrypted={!!effectivePassword}
   bannerPostMeta={bannerPostMeta}
 >
   <!-- KaTeX 按需加载 - 仅在文章页面 -->
@@ -260,7 +265,7 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
                   {" " + i18n(remarkPluginFrontmatter.minutes === 1 ? I18nKey.minuteCount : I18nKey.minutesCount)}
                 </span>
               </div>
-              {entry.data.password && (
+              {effectivePassword && (
                 <div class="flex items-center gap-1 whitespace-nowrap">
                   <Icon name="material-symbols:lock-outline" class="text-base" />
                   <span>{i18n(I18nKey.postEncrypted)}</span>
@@ -325,7 +330,7 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
                 }
               </div>
             </div>
-            {entry.data.password && (
+            {effectivePassword && (
               <div class="flex flex-row items-center">
                 <div
                   class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2"
@@ -408,8 +413,8 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
         )
       }
 
-      {entry.data.password ? (
-        <EncryptedPost password={entry.data.password} slug={entry.id} hint={entry.data.passwordHint}>
+      {effectivePassword ? (
+        <EncryptedPost password={effectivePassword} slug={entry.id} hint={entry.data.passwordHint}>
           <Markdown class="mb-6 markdown-content onload-animation">
             <Content />
           </Markdown>
@@ -724,5 +729,5 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
   }
 
   <!-- 评论 -->
-  {entry.data.comment && !entry.data.password && <Comment post={entry} />}
+  {entry.data.comment && !effectivePassword && <Comment post={entry} />}
 </MainGridLayout>
