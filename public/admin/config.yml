@@ -1,0 +1,61 @@
+backend:
+  name: github
+  repo: yin37/Firefly
+  branch: master
+  base_url: https://auth.xiaoyin.ccwu.cc
+  auth_endpoint: /auth
+media_folder: src/content/posts/images
+public_folder: ./images
+site_url: https://blog.xiaoyin.ccwu.cc
+locale: zh_CN
+
+collections:
+  - name: posts
+    label: 文章
+    label_singular: 文章
+    folder: src/content/posts
+    create: true
+    slug: "{{slug}}"
+    extension: md
+    format: frontmatter
+    editor:
+      preview: false
+    sortable_fields: [title, published]
+    summary: "{{title}} - {{published}}"
+    fields:
+      - label: 标题
+        name: title
+        widget: string
+      - label: 发布日期
+        name: published
+        widget: datetime
+        format: "YYYY-MM-DD"
+        date_format: "YYYY-MM-DD"
+        time_format: false
+        default: "{{now}}"
+      - label: 简介
+        name: description
+        widget: string
+        required: false
+      - label: 标签
+        name: tags
+        widget: list
+        required: false
+        default: []
+      - label: 分类
+        name: category
+        widget: string
+        required: false
+      - label: 草稿（开了就不会发布到线上）
+        name: draft
+        widget: boolean
+        default: false
+        required: false
+      - label: 封面图（可选）
+        name: image
+        widget: image
+        required: false
+        media_folder: /src/content/posts/images
+      - label: 正文
+        name: body
+        widget: markdown
