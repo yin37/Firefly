@@ -16,6 +16,13 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 	// 主页
 	links.push(LinkPresets.Home);
 
+	// 写作后台：直达后台新建文章页
+	links.push({
+		name: "写作",
+		url: "/admin/#/collections/posts/new",
+		icon: "material-symbols:edit",
+	});
+
 	// 文章及其子菜单
 	links.push({
 		name: "文章",
