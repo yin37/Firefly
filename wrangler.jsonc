@@ -4,5 +4,11 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"assets": {
 		"directory": "./dist"
-	}
+	},
+	"routes": [
+		{
+			"pattern": "blog.xiaoyin.ccwu.cc",
+			"custom_domain": true
+		}
+	]
 }

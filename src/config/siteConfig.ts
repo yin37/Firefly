@@ -46,7 +46,7 @@ export const siteConfig: SiteConfig = {
 	subtitle: "记录与分享",
 
 	// 站点 URL
-	site_url: "https://firefly.2896068923.workers.dev",
+	site_url: "https://blog.xiaoyin.ccwu.cc",
 
 	// 站点描述
 	description:
