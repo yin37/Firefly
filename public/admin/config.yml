@@ -55,6 +55,11 @@ collections:
         name: series
         widget: string
         required: false
+      - label: 仅自己可见（不出现在首页/归档/搜索，需直接输入网址访问）
+        name: hidden
+        widget: boolean
+        default: false
+        required: false
       - label: 草稿（开了就不会发布到线上）
         name: draft
         widget: boolean

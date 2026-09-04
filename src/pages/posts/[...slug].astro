@@ -12,6 +12,7 @@ import {
 	getRelatedPosts,
 	getSeriesPosts,
 	getSortedPosts,
+	getSortedPostsIncludingHidden,
 } from "@utils/content-utils";
 import {
 	getCategoryUrl,
@@ -52,7 +53,7 @@ const showSponsorButton =
 const showPostActionCard = siteConfig.post.share || showSponsorButton;
 
 export async function getStaticPaths() {
-	const blogEntries = await getSortedPosts();
+	const blogEntries = await getSortedPostsIncludingHidden();
 	return blogEntries.map((entry) => {
 		// 将 id 转换为 slug（移除扩展名）以匹配路由参数
 		const slug = removeFileExtension(entry.id);

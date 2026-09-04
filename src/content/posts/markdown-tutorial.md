@@ -1,5 +1,5 @@
 ---
-draft: true
+hidden: true
 title: Markdown 教程
 published: 1970-01-01
 pinned: false

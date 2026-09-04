@@ -1,5 +1,5 @@
 ---
-draft: true
+hidden: true
 title: Markdown 扩展功能
 published: 1970-01-01
 updated: 1970-01-01

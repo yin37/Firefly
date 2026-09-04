@@ -4,9 +4,13 @@ import { i18n } from "@i18n/translation";
 import { getCategoryUrl } from "@utils/url-utils";
 
 // // Retrieve posts and sort them by publication date
-async function getRawSortedPosts() {
+async function getRawSortedPosts(includeHidden = false) {
 	const allBlogPosts = await getCollection("posts", ({ data }) => {
-		return import.meta.env.PROD ? data.draft !== true : true;
+		if (!import.meta.env.PROD) return true;
+		if (data.draft === true) return false;
+		// hidden: 仅自己可见 —— 不出现在任何列表，但文章页面仍可访问
+		if (!includeHidden && data.hidden === true) return false;
+		return true;
 	});
 
 	const sorted = allBlogPosts.sort((a, b) => {
@@ -22,9 +26,7 @@ async function getRawSortedPosts() {
 	return sorted;
 }
 
-export async function getSortedPosts(): Promise<CollectionEntry<"posts">[]> {
-	const sorted = await getRawSortedPosts();
-
+function wirePrevNext(sorted: CollectionEntry<"posts">[]) {
 	for (let i = 1; i < sorted.length; i++) {
 		sorted[i].data.nextSlug = sorted[i - 1].id;
 		sorted[i].data.nextTitle = sorted[i - 1].data.title;
@@ -33,8 +35,44 @@ export async function getSortedPosts(): Promise<CollectionEntry<"posts">[]> {
 		sorted[i].data.prevSlug = sorted[i + 1].id;
 		sorted[i].data.prevTitle = sorted[i + 1].data.title;
 	}
+}
 
+export async function getSortedPosts(): Promise<CollectionEntry<"posts">[]> {
+	const sorted = await getRawSortedPosts();
+	wirePrevNext(sorted);
 	return sorted;
+}
+
+/**
+ * 返回包括 hidden（仅自己可见）文章在内的全部非草稿文章。
+ * 仅用于文章页生成：隐藏文章可以访问，但不出现在任何列表。
+ * 上一/下一篇导航只在公开文章之间串联，不会泄露隐藏文章的存在。
+ */
+export async function getSortedPostsIncludingHidden(): Promise<
+	CollectionEntry<"posts">[]
+> {
+	const publicPosts = await getRawSortedPosts(false);
+	wirePrevNext(publicPosts);
+
+	const allPosts = await getRawSortedPosts(true);
+	const result: CollectionEntry<"posts">[] = [];
+	let pi = 0; // 指向 publicPosts 中下一个公开文章的位置
+	for (const post of allPosts) {
+		if (post.data.hidden !== true) {
+			result.push(post);
+			pi++;
+		} else {
+			// 隐藏文章借用公开链中相邻文章作为上一篇/下一篇
+			const newer = publicPosts[pi - 1] ?? null;
+			const older = publicPosts[pi] ?? null;
+			post.data.nextSlug = newer ? newer.id : "";
+			post.data.nextTitle = newer ? newer.data.title : "";
+			post.data.prevSlug = older ? older.id : "";
+			post.data.prevTitle = older ? older.data.title : "";
+			result.push(post);
+		}
+	}
+	return result;
 }
 export type PostForList = {
 	id: string;
@@ -231,7 +269,10 @@ export async function getRelatedPosts(
 	maxCount = 5,
 ): Promise<PostForList[]> {
 	const allPosts = await getCollection<"posts">("posts", ({ data }) => {
-		return import.meta.env.PROD ? data.draft !== true : true;
+		if (!import.meta.env.PROD) return true;
+		if (data.draft === true) return false;
+		if (data.hidden === true) return false;
+		return true;
 	});
 
 	// 排除自身和加密文章
