@@ -46,7 +46,7 @@ export const siteConfig: SiteConfig = {
 	subtitle: "记录与分享",
 
 	// 站点 URL
-	site_url: "https://firefly.cuteleaf.cn",
+	site_url: "https://firefly.2896068923.workers.dev",
 
 	// 站点描述
 	description:
