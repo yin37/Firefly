@@ -4,8 +4,8 @@ backend:
   branch: master
   base_url: https://auth.xiaoyin.ccwu.cc
   auth_endpoint: /auth
-media_folder: src/content/posts/images
-public_folder: ./images
+media_folder: /public/images
+public_folder: /images
 site_url: https://blog.xiaoyin.ccwu.cc
 locale: zh_CN
 
@@ -55,7 +55,6 @@ collections:
         name: image
         widget: image
         required: false
-        media_folder: /src/content/posts/images
       - label: 正文
         name: body
         widget: markdown
