@@ -63,26 +63,18 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 		url: "#",
 		icon: "material-symbols:person",
 		children: [
+			// 私人书架：仅自己可见的文章清单
+			{
+				name: "私人书架",
+				url: "/private/",
+				icon: "material-symbols:auto-stories",
+			},
+
 			// 动态
 			LinkPresets.Dynamic,
 
 			// 相册
 			LinkPresets.Gallery,
-
-			// 书签导航
-			LinkPresets.Booknav,
-
-			// 哔哩哔哩追番
-			LinkPresets.Bilibili,
-
-			// 番组计划
-			LinkPresets.Bangumi,
-
-			// VNDB
-			LinkPresets.VNDB,
-
-			// MyAnimeList
-			LinkPresets.MAL,
 		],
 	});
 
