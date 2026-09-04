@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Firefly 一款清新美观的 Astro 博客主题模板
 published: 1970-01-02
 pinned: true

@@ -46,6 +46,15 @@ collections:
         name: category
         widget: string
         required: false
+      - label: 置顶（显示在文章列表最前面）
+        name: pinned
+        widget: boolean
+        default: false
+        required: false
+      - label: 系列（连载文章专用，相同系列名自动归为一组）
+        name: series
+        widget: string
+        required: false
       - label: 草稿（开了就不会发布到线上）
         name: draft
         widget: boolean
@@ -58,3 +67,43 @@ collections:
       - label: 正文
         name: body
         widget: markdown
+
+  - name: settings
+    label: 站点设置
+    files:
+      - name: profile
+        label: 个人信息
+        file: src/config/profile.json
+        format: json
+        fields:
+          - label: 名字
+            name: name
+            widget: string
+          - label: 个人签名
+            name: bio
+            widget: string
+            required: false
+          - label: 头像（上传后自动存到 public/images）
+            name: avatar
+            widget: image
+            required: false
+          - label: 社交链接（留空图标代码的条目会被忽略）
+            name: links
+            widget: list
+            required: false
+            fields:
+              - label: 名称
+                name: name
+                widget: string
+              - label: 链接地址
+                name: url
+                widget: string
+              - label: 图标代码（如 fa7-brands:github）
+                name: icon
+                widget: string
+                required: false
+              - label: 显示名称文字
+                name: showName
+                widget: boolean
+                default: false
+                required: false

@@ -1,4 +1,5 @@
 ---
+draft: true
 title: Markdown PlantUML 图表
 published: 1970-01-01
 description: 用于验证 Firefly 中 PlantUML 插件渲染、主题切换与交互能力的示例文章。
