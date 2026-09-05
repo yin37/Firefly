@@ -226,9 +226,16 @@ import { url } from "@/utils/url-utils";
 			formBtn.style.opacity = on ? "0.5" : "";
 		}
 
+		function clearMeCache() {
+			try {
+				sessionStorage.removeItem("ff_me_cache");
+			} catch (e) {}
+		}
+
 		function handleAuth(endpoint, body, msgEl, btnEl) {
 			setLoading(btnEl, true);
 			msgEl.textContent = "";
+			clearMeCache();
 			fetch(endpoint, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -287,19 +294,34 @@ import { url } from "@/utils/url-utils";
 		});
 
 		document.getElementById("auth-logout").addEventListener("click", function () {
+			clearMeCache();
 			fetch("/api/auth/logout", { method: "POST" }).then(function () {
 				location.reload();
 			});
 		});
 
 		// 初始化：查会话状态，决定按钮图标
-		fetch("/api/auth/me")
-			.then(function (r) {
-				return r.json();
-			})
-			.then(function (d) {
-				if (d && d.user) showLoggedIn(d.user);
-			})
-			.catch(function () {});
+		// 优先用 sessionStorage 缓存（10 分钟内有效），避免每次整页加载都请求 API
+		var ME_CACHE = "ff_me_cache";
+		var cached = null;
+		try {
+			cached = JSON.parse(sessionStorage.getItem(ME_CACHE));
+		} catch (e) {}
+		if (cached && cached.exp > Date.now() && typeof cached.user !== "undefined") {
+			if (cached.user) showLoggedIn(cached.user);
+		} else {
+			fetch("/api/auth/me")
+				.then(function (r) {
+					return r.json();
+				})
+				.then(function (d) {
+					var user = d && d.user ? d.user : null;
+					try {
+						sessionStorage.setItem(ME_CACHE, JSON.stringify({ user: user, exp: Date.now() + 600000 }));
+					} catch (e) {}
+					if (user) showLoggedIn(user);
+				})
+				.catch(function () {});
+		}
 	})();
 </script>
