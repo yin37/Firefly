@@ -6,6 +6,111 @@
 		<meta name="robots" content="noindex" />
 		<title>博客后台管理</title>
 		<link rel="icon" type="image/png" href="/favicon/firefly-32.png" />
+		<script>
+			// 保存/发布文章后自动跳转到网站主页
+			// 原理：拦截「保存/发布」按钮点击（含 Ctrl/Cmd+S）→ Sveltia 保存完成
+			// 会从编辑页跳回列表页 → 捕捉这次路由变化 → 弹出倒计时 → 跳转主页
+			// 随时可点「取消」留在后台
+			(function () {
+				var pendingUntil = 0; // 保存动作的有效期（90 秒内离开编辑页才算保存后跳转）
+				var countdownTimer = null;
+				var overlay = null;
+
+				function isEntryRoute(hash) {
+					// 编辑现有文章 /entries/<slug> 或新建 /new
+					return hash.indexOf("/entries/") > -1 || /\/new($|\?|#)/.test(hash);
+				}
+
+				function markSave() {
+					pendingUntil = Date.now() + 90000;
+				}
+
+				function cancelCountdown() {
+					if (countdownTimer) {
+						clearInterval(countdownTimer);
+						countdownTimer = null;
+					}
+					if (overlay) {
+						overlay.remove();
+						overlay = null;
+					}
+				}
+
+				function showCountdown() {
+					if (overlay) return;
+					var seconds = 5;
+					overlay = document.createElement("div");
+					overlay.id = "auto-jump-overlay";
+					overlay.style.cssText =
+						"position:fixed;right:20px;bottom:20px;z-index:99999;" +
+						"background:#1c1f27;color:#e8eaf0;padding:14px 18px;border-radius:12px;" +
+						"box-shadow:0 8px 24px rgba(0,0,0,.35);font:13px/1.6 system-ui,sans-serif;" +
+						"max-width:300px;";
+					overlay.innerHTML =
+						'<div style="font-weight:600;margin-bottom:2px">✅ 已保存，<span id="aj-sec">' +
+						seconds +
+						'</span> 秒后跳转到网站主页</div>' +
+						'<div style="opacity:.6;font-size:12px;margin-bottom:8px">网站自动部署约需 1~3 分钟，稍等片刻可见新内容</div>' +
+						'<button id="aj-cancel" style="all:unset;cursor:pointer;background:#2c3140;color:#cfd4e0;' +
+						'padding:3px 12px;border-radius:8px;font-size:12px">留在后台</button>';
+					document.body.appendChild(overlay);
+
+					document.getElementById("aj-cancel").addEventListener("click", function (e) {
+						e.stopPropagation();
+						cancelCountdown();
+					});
+
+					countdownTimer = setInterval(function () {
+						seconds--;
+						var secEl = document.getElementById("aj-sec");
+						if (secEl) secEl.textContent = seconds;
+						if (seconds <= 0) {
+							cancelCountdown();
+							location.href = "/";
+						}
+					}, 1000);
+				}
+
+				// 1) 捕获「保存 / 发布」按钮点击（Sveltia 界面按钮）
+				document.addEventListener(
+					"click",
+					function (e) {
+						// 倒计时期间点页面其他地方 = 留在后台继续操作
+						if (overlay && !overlay.contains(e.target)) {
+							cancelCountdown();
+							return;
+						}
+						var el = e.target;
+						while (el && el !== document) {
+							if (el.tagName === "BUTTON" || (el.getAttribute && el.getAttribute("role") === "button")) {
+								var label = ((el.textContent || "") + " " + (el.getAttribute("aria-label") || "")).toLowerCase();
+								if (/保存|发布|save|publish/.test(label)) markSave();
+								break;
+							}
+							el = el.parentElement;
+						}
+					},
+					true,
+				);
+
+				// 2) 快捷键保存也认
+				document.addEventListener(
+					"keydown",
+					function (e) {
+						if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) markSave();
+					},
+					true,
+				);
+
+				// 3) 保存后从编辑页离开（回到列表）→ 触发倒计时跳转
+				window.addEventListener("hashchange", function () {
+					var h = location.hash || "";
+					if (Date.now() <= pendingUntil && !isEntryRoute(h) && h.indexOf("/collections/") > -1) {
+						showCountdown();
+					}
+				});
+			})();
+		</script>
 	</head>
 	<body>
 		<script src="https://cdn.jsdelivr.net/npm/@sveltia/cms/dist/sveltia-cms.js"></script>
