@@ -1,0 +1,22 @@
+---
+// 私人文章路由：仅「仅自己可见」(hidden) 的文章在此路径生成，
+// 由 Cloudflare Access 对 /private* 路径做登录门禁（仅站长账号可访问）
+import PostPage from "@components/features/PostPage.astro";
+import { getSortedPostsIncludingHidden } from "@utils/content-utils";
+import { removeFileExtension } from "@/utils/url-utils";
+
+export async function getStaticPaths() {
+	const allPosts = await getSortedPostsIncludingHidden();
+	return allPosts
+		.filter((p) => p.data.hidden === true)
+		.map((entry) => {
+			const slug = removeFileExtension(entry.id);
+			return {
+				params: { slug },
+				props: { entry },
+			};
+		});
+}
+---
+
+<PostPage {...Astro.props} />
