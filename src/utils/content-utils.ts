@@ -168,7 +168,12 @@ export type Tag = {
 
 export async function getTagList(): Promise<Tag[]> {
 	const allBlogPosts = await getCollection<"posts">("posts", ({ data }) => {
-		return import.meta.env.PROD ? data.draft !== true : true;
+		// 与 getRawSortedPosts 口径一致：已删除/草稿/仅自己可见的文章不进入公开统计
+		if (data.deleted === true) return false;
+		if (!import.meta.env.PROD) return true;
+		if (data.draft === true) return false;
+		if (data.hidden === true) return false;
+		return true;
 	});
 
 	const countMap: { [key: string]: number } = {};
@@ -195,7 +200,12 @@ export type Category = {
 
 export async function getCategoryList(): Promise<Category[]> {
 	const allBlogPosts = await getCollection<"posts">("posts", ({ data }) => {
-		return import.meta.env.PROD ? data.draft !== true : true;
+		// 与 getRawSortedPosts 口径一致：已删除/草稿/仅自己可见的文章不进入公开统计
+		if (data.deleted === true) return false;
+		if (!import.meta.env.PROD) return true;
+		if (data.draft === true) return false;
+		if (data.hidden === true) return false;
+		return true;
 	});
 	const count: { [key: string]: number } = {};
 	allBlogPosts.forEach((post: { data: { category: string | null } }) => {
