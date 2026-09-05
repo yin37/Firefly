@@ -30,17 +30,37 @@ function formatDate(d: Date): string {
 				仅自己可见的文章清单 · 共 {hiddenPosts.length} 篇
 			</p>
 			<p class="opacity-60 text-sm mt-1">
-				本页没有公开入口，不会被搜索引擎收录；请把网址收藏到书签。
+				本页仅站长账号登录后可见。
 			</p>
 		</div>
 
-		{hiddenPosts.length === 0 && (
-			<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-8 text-center opacity-60">
-				还没有「仅自己可见」的文章。在后台编辑文章时勾选「仅自己可见」即可添加到这里。
-			</div>
-		)}
+		<!-- 未登录/非管理员看到的提示（默认显示） -->
+		<div id="private-gate" class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-8 text-center">
+			<p class="text-lg font-bold mb-2">🔒 私人内容</p>
+			<p class="opacity-60 text-sm mb-5">私人书架仅站长账号可见，请先登录。</p>
+			<a
+				href="/login/?redirect=%2Fprivate%2F"
+				class="inline-block rounded-lg bg-(--primary) text-white dark:text-black/70 px-5 py-2 text-sm font-medium hover:opacity-85 transition"
+			>
+				登录
+			</a>
+		</div>
 
-		<div class="flex flex-col gap-4">
+		<!-- 管理员工具条（管理员登录后显示） -->
+		<div id="admin-toolbar" class="hidden rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4 mb-4 flex flex-wrap gap-3 items-center text-sm">
+			<span class="opacity-60">管理员模式</span>
+			<a
+				href="/admin/"
+				class="rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-3 py-1.5 transition"
+			>
+				✏️ 后台管理文章（编辑 / 显示隐藏 / 删除）
+			</a>
+			<a href="/login/" class="opacity-50 hover:opacity-90 transition">账号设置</a>
+		</div>
+
+		<!-- 文章列表（仅管理员可见；默认隐藏防闪烁） -->
+		<div id="private-list" class="hidden">
+			<div class="flex flex-col gap-4">
 			{hiddenPosts.map((post) => {
 				const slug = post.id
 					.replace(/\.(md|mdx)$/, "")
@@ -73,6 +93,23 @@ function formatDate(d: Date): string {
 				</a>
 				);
 			})}
+			</div>
 		</div>
 	</div>
+
+	<script is:inline>
+		(function() {
+			fetch('/api/auth/me').then(function(r) { return r.json(); }).then(function(d) {
+				var isAdmin = d && d.user && d.user.isAdmin;
+				if (isAdmin) {
+					document.getElementById('private-gate').classList.add('hidden');
+					var list = document.getElementById('private-list');
+					list.classList.remove('hidden');
+					list.style.display = 'block';
+					document.getElementById('admin-toolbar').classList.remove('hidden');
+				}
+				// 未登录或非管理员：保持门禁提示，列表保持隐藏
+			}).catch(function() {});
+		})();
+	</script>
 </MainGridLayout>

@@ -1,14 +1,28 @@
 {
 	"name": "firefly",
+	"main": "./worker/index.ts",
 	"compatibility_date": "2025-01-01",
 	"compatibility_flags": ["nodejs_compat"],
 	"assets": {
-		"directory": "./dist"
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "404-page"
 	},
 	"routes": [
 		{
 			"pattern": "blog.xiaoyin.ccwu.cc",
 			"custom_domain": true
 		}
-	]
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "firefly-users",
+			"database_id": "fd1bfb69-b935-469e-ac0d-233e0d38b296"
+		}
+	],
+	"vars": {
+		"ADMIN_EMAILS": "2896068923@qq.com",
+		"PRIVATE_PASSWORD": "021926"
+	}
 }

@@ -1,0 +1,97 @@
+---
+// 注册页：独立轻量页面
+---
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<title>注册 · yin37 的个人博客</title>
+		<style>
+			* { box-sizing: border-box; margin: 0; padding: 0; }
+			body {
+				font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+				min-height: 100vh; display: flex; align-items: center; justify-content: center;
+				background: #f3f5f9; color: #222;
+			}
+			@media (prefers-color-scheme: dark) {
+				body { background: #12141a; color: #e6e6e6; }
+				.card { background: #1c1f27 !important; }
+				input { background: #262a35 !important; color: #e6e6e6 !important; border-color: #333947 !important; }
+			}
+			.card {
+				background: #fff; border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 380px;
+				box-shadow: 0 8px 30px rgba(0,0,0,.08);
+			}
+			h1 { font-size: 22px; margin-bottom: 6px; }
+			.sub { font-size: 13px; opacity: .55; margin-bottom: 24px; }
+			label { display: block; font-size: 13px; margin: 14px 0 6px; opacity: .75; }
+			input {
+				width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #ddd;
+				font-size: 14px; outline: none; transition: border-color .2s;
+			}
+			input:focus { border-color: #4a7dff; }
+			button {
+				width: 100%; margin-top: 22px; padding: 11px; border: 0; border-radius: 10px;
+				background: #4a7dff; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+				transition: opacity .2s;
+			}
+			button:hover { opacity: .88; }
+			button:disabled { opacity: .5; cursor: wait; }
+			.msg { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
+			.msg.err { color: #d64545; }
+			.msg.ok { color: #2f9e44; }
+			.links { margin-top: 18px; font-size: 13px; text-align: center; opacity: .7; }
+			.links a { color: inherit; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<h1>注册账号</h1>
+			<p class="sub">邮箱 + 密码即可，注册后可登录本站</p>
+			<form id="f">
+				<label for="email">邮箱</label>
+				<input id="email" name="email" type="email" autocomplete="email" required />
+				<label for="password">密码（至少 6 位）</label>
+				<input id="password" name="password" type="password" autocomplete="new-password" minlength="6" required />
+				<label for="password2">确认密码</label>
+				<input id="password2" name="password2" type="password" autocomplete="new-password" minlength="6" required />
+				<button type="submit" id="btn">注 册</button>
+			</form>
+			<p class="msg" id="msg"></p>
+			<p class="links">已有账号？<a href="/login/">直接登录</a> · <a href="/">回首页</a></p>
+		</div>
+		<script>
+			var msg = document.getElementById('msg');
+			var btn = document.getElementById('btn');
+
+			document.getElementById('f').addEventListener('submit', function(e) {
+				e.preventDefault();
+				var pwd = document.getElementById('password').value;
+				var pwd2 = document.getElementById('password2').value;
+				if (pwd !== pwd2) { msg.className = 'msg err'; msg.textContent = '两次输入的密码不一致'; return; }
+				btn.disabled = true;
+				msg.textContent = '';
+				fetch('/api/auth/register', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						email: document.getElementById('email').value.trim(),
+						password: pwd
+					})
+				}).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+				.then(function(res) {
+					if (res.ok) {
+						msg.className = 'msg ok'; msg.textContent = '注册成功，正在进入…';
+						setTimeout(function(){ location.href = '/'; }, 600);
+					} else {
+						msg.className = 'msg err'; msg.textContent = (res.d && res.d.error) || '注册失败';
+						btn.disabled = false;
+					}
+				})
+				.catch(function() { msg.className = 'msg err'; msg.textContent = '网络错误，请重试'; btn.disabled = false; });
+			});
+		</script>
+	</body>
+</html>

@@ -201,5 +201,28 @@ const labels = {
       sessionStorage.removeItem(cacheKey);
     });
   }
+
+  // 管理员自动解锁：已登录管理员访问加密文章时，从服务端获取解锁密码并自动解密
+  if (!cached) {
+    fetch('/api/auth/me').then(function(r) { return r.json(); }).then(function(me) {
+      if (me && me.user && me.user.isAdmin) {
+        fetch('/api/private/unlock').then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.password) {
+            decrypt(d.password).then(function(html) {
+              sessionStorage.setItem(cacheKey, d.password);
+              showContent(html);
+            }).catch(function() { /* 解密失败则保留手动输入框 */ });
+          }
+        }).catch(function() {});
+      } else if (me && me.user) {
+        // 已登录的非管理员：在锁界面下加一行提示
+        var tip = document.createElement('p');
+        tip.className = 'text-xs text-black/30 dark:text-white/30 text-center m-0';
+        tip.textContent = '本文为私人内容，仅站长可阅读';
+        var card = document.querySelector('#password-ui .card-base');
+        if (card) card.appendChild(tip);
+      }
+    }).catch(function() {});
+  }
 })();
 </script>

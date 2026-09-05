@@ -1,0 +1,121 @@
+---
+// 登录页：独立轻量页面，不依赖主题布局
+---
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<title>登录 · yin37 的个人博客</title>
+		<style>
+			* { box-sizing: border-box; margin: 0; padding: 0; }
+			body {
+				font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+				min-height: 100vh; display: flex; align-items: center; justify-content: center;
+				background: #f3f5f9; color: #222;
+			}
+			@media (prefers-color-scheme: dark) {
+				body { background: #12141a; color: #e6e6e6; }
+				.card { background: #1c1f27 !important; }
+				input { background: #262a35 !important; color: #e6e6e6 !important; border-color: #333947 !important; }
+			}
+			.card {
+				background: #fff; border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 380px;
+				box-shadow: 0 8px 30px rgba(0,0,0,.08);
+			}
+			h1 { font-size: 22px; margin-bottom: 6px; }
+			.sub { font-size: 13px; opacity: .55; margin-bottom: 24px; }
+			label { display: block; font-size: 13px; margin: 14px 0 6px; opacity: .75; }
+			input {
+				width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #ddd;
+				font-size: 14px; outline: none; transition: border-color .2s;
+			}
+			input:focus { border-color: #4a7dff; }
+			button {
+				width: 100%; margin-top: 22px; padding: 11px; border: 0; border-radius: 10px;
+				background: #4a7dff; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+				transition: opacity .2s;
+			}
+			button:hover { opacity: .88; }
+			button:disabled { opacity: .5; cursor: wait; }
+			.msg { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
+			.msg.err { color: #d64545; }
+			.msg.ok { color: #2f9e44; }
+			.links { margin-top: 18px; font-size: 13px; text-align: center; opacity: .7; }
+			.links a { color: inherit; }
+			.logged { text-align: center; }
+			.badge { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 99px; font-size: 12px; background: #eef2ff; color: #4a5fd0; }
+			.logged-out { display: none; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="logged" id="logged">
+				<h1>你已登录</h1>
+				<p class="sub" id="who"></p>
+				<span class="badge" id="badge"></span>
+				<button id="logout">退出登录</button>
+			</div>
+			<div class="logged-out" id="form-box">
+				<h1>登录</h1>
+				<p class="sub">登录以同步你的身份与访问权限</p>
+				<form id="f">
+					<label for="email">邮箱</label>
+					<input id="email" name="email" type="email" autocomplete="email" required />
+					<label for="password">密码</label>
+					<input id="password" name="password" type="password" autocomplete="current-password" required />
+					<button type="submit" id="btn">登 录</button>
+				</form>
+				<p class="msg" id="msg"></p>
+				<p class="links">还没有账号？<a href="/register/">注册一个</a> · <a href="/">回首页</a></p>
+			</div>
+		</div>
+		<script>
+			var redirect = new URLSearchParams(location.search).get('redirect') || '/';
+			var msg = document.getElementById('msg');
+			var btn = document.getElementById('btn');
+
+			fetch('/api/auth/me').then(function(r){ return r.json(); }).then(function(d){
+				if (d && d.user) {
+					document.getElementById('logged').style.display = 'block';
+					document.getElementById('form-box').style.display = 'none';
+					document.getElementById('who').textContent = d.user.email;
+					document.getElementById('badge').textContent = d.user.isAdmin ? '管理员' : '普通用户';
+				} else {
+					document.getElementById('form-box').style.display = 'block';
+				}
+			});
+
+			document.getElementById('logout').addEventListener('click', function() {
+				fetch('/api/auth/logout', { method: 'POST' }).then(function(){
+					location.href = '/';
+				});
+			});
+
+			document.getElementById('f').addEventListener('submit', function(e) {
+				e.preventDefault();
+				btn.disabled = true;
+				msg.textContent = '';
+				fetch('/api/auth/login', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						email: document.getElementById('email').value.trim(),
+						password: document.getElementById('password').value
+					})
+				}).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+				.then(function(res) {
+					if (res.ok) {
+						msg.className = 'msg ok'; msg.textContent = '登录成功，正在跳转…';
+						setTimeout(function(){ location.href = redirect; }, 500);
+					} else {
+						msg.className = 'msg err'; msg.textContent = (res.d && res.d.error) || '登录失败';
+						btn.disabled = false;
+					}
+				})
+				.catch(function() { msg.className = 'msg err'; msg.textContent = '网络错误，请重试'; btn.disabled = false; });
+			});
+		</script>
+	</body>
+</html>
