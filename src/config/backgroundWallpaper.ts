@@ -110,8 +110,11 @@ export const backgroundWallpaper: BackgroundWallpaperConfig = {
 					url: "https://github.com/yin37/Firefly",
 					showName: true,
 				},
-				// Email 与 Sponsor 图标已按站长要求移除（原为主题作者的联系方式和打赏页）
-				// 如需添加自己的邮箱，仿照下面 RSS 的格式加回即可
+				{
+					name: "Email",
+					icon: "fa7-solid:envelope",
+					url: "mailto:2896068923@qq.com",
+				},
 				{
 					name: "RSS",
 					icon: "fa7-solid:rss",
