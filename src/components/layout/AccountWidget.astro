@@ -114,6 +114,23 @@ import { url } from "@/utils/url-utils";
 			>
 				📖 打开私人书架
 			</a>
+			<button type="button" id="auth-pwd-toggle"
+				class="w-full py-2 rounded-lg text-sm font-medium bg-black/5 dark:bg-white/10 text-black/70 dark:text-white/70 hover:opacity-85 active:scale-[0.98] transition-all">
+				修改密码
+			</button>
+			<form id="auth-pwd-form" class="hidden w-full flex flex-col gap-2 text-left">
+				<input id="auth-pwd-old" type="password" autocomplete="current-password" placeholder="旧密码"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10 text-black/80 dark:text-white/80 outline-none focus:ring-2 ring-(--primary) transition" />
+				<input id="auth-pwd-new" type="password" autocomplete="new-password" placeholder="新密码（至少 6 位）"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10 text-black/80 dark:text-white/80 outline-none focus:ring-2 ring-(--primary) transition" />
+				<input id="auth-pwd-new2" type="password" autocomplete="new-password" placeholder="确认新密码"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10 text-black/80 dark:text-white/80 outline-none focus:ring-2 ring-(--primary) transition" />
+				<p id="auth-pwd-msg" class="text-xs text-red-500 dark:text-red-400 m-0 hidden"></p>
+				<button type="submit" id="auth-pwd-btn"
+					class="w-full py-2 rounded-lg text-sm font-bold text-white dark:text-black bg-(--primary) hover:opacity-90 active:scale-[0.98] transition-all">
+					确认修改
+				</button>
+			</form>
 			<button type="button" id="auth-logout"
 				class="mt-2 w-full py-2 rounded-lg text-sm font-medium bg-black/5 dark:bg-white/10 text-black/70 dark:text-white/70 hover:opacity-85 active:scale-[0.98] transition-all">
 				退出登录
@@ -311,6 +328,11 @@ import { url } from "@/utils/url-utils";
 				});
 				return;
 			}
+			if (t.closest("#auth-pwd-toggle")) {
+				var pf = $("auth-pwd-form");
+				if (pf) pf.classList.toggle("hidden");
+				return;
+			}
 			// 点击遮罩空白处关闭
 			var overlay2 = $("auth-overlay");
 			var card = $("auth-card");
@@ -352,6 +374,61 @@ import { url } from "@/utils/url-utils";
 					$("auth-reg-msg"),
 					$("auth-reg-btn"),
 				);
+			}
+			if (f.id === "auth-pwd-form") {
+				e.preventDefault();
+				var msg = $("auth-pwd-msg");
+				var btn = $("auth-pwd-btn");
+				var oldP = ($("auth-pwd-old") || {}).value || "";
+				var newP = ($("auth-pwd-new") || {}).value || "";
+				var newP2 = ($("auth-pwd-new2") || {}).value || "";
+				function pwdMsg(t) {
+					if (msg) {
+						msg.textContent = t;
+						msg.classList.toggle("hidden", !t);
+					}
+				}
+				if (newP.length < 6) return pwdMsg("新密码至少 6 位");
+				if (newP !== newP2) return pwdMsg("两次输入的新密码不一致");
+				setLoading(btn, true);
+				pwdMsg("");
+				fetch("/api/auth/change-password", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ oldPassword: oldP, newPassword: newP }),
+				})
+					.then(function (r) {
+						return r.json().catch(function () {
+							throw new Error("BAD_RESPONSE_" + r.status);
+						});
+					})
+					.then(function (d) {
+						if (d && d.ok) {
+							pwdMsg("");
+							pwdMsg("✅ 密码已修改，请牢记新密码");
+							["auth-pwd-old", "auth-pwd-new", "auth-pwd-new2"].forEach(function (id) {
+								var el = $(id);
+								if (el) el.value = "";
+							});
+							setTimeout(function () {
+								pwdMsg("");
+								var form = $("auth-pwd-form");
+								if (form) form.classList.add("hidden");
+							}, 2500);
+						} else {
+							pwdMsg((d && d.error) || "修改失败，请重试");
+						}
+					})
+					.catch(function (err) {
+						pwdMsg(
+							err && String(err.message || "").indexOf("BAD_RESPONSE_") === 0
+								? "服务器响应异常，请稍后重试"
+								: "网络错误，请检查网络后重试",
+						);
+					})
+					.finally(function () {
+						setLoading(btn, false);
+					});
 			}
 		});
 

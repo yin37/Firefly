@@ -586,7 +586,15 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
       )}
 
       <!-- 后台编辑入口：仅方便站长快速修改，访客点击会停在 GitHub 登录页，无法写入 -->
-      <div class="flex justify-end gap-2 mb-2 onload-animation">
+      <div class="flex items-center gap-2 mb-2 onload-animation">
+        <!-- 阅读量（访客可见，存自家数据库） -->
+        <span id="post-views" data-slug={removeFileExtension(entry.id)}
+          class="inline-flex items-center gap-1.5 text-sm text-(--content-meta) mr-auto"
+        >
+          <Icon name="material-symbols:visibility-outline" class="text-base" />
+          <span id="post-views-num">--</span>
+          <span>次阅读</span>
+        </span>
         <button
           id="admin-delete-btn"
           data-slug={removeFileExtension(entry.id)}
@@ -822,6 +830,55 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
             }, 4000);
           });
       });
+    })();
+
+    // ---- 阅读量统计：同一浏览器同一篇文章本次会话只计 1 次 ----
+    (function () {
+      var box = document.getElementById("post-views");
+      var num = document.getElementById("post-views-num");
+      if (!box || !num) return;
+      var slug = box.getAttribute("data-slug");
+      if (!slug) return;
+      function show(n) {
+        num.textContent = String(n);
+      }
+      var viewedKey = "ff_viewed_" + slug;
+      var viewed = false;
+      try {
+        viewed = sessionStorage.getItem(viewedKey) === "1";
+      } catch (e) {}
+      if (viewed) {
+        fetch("/api/views?slugs=" + encodeURIComponent(slug))
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var c = d && d.counts && d.counts[slug];
+            if (typeof c === "number") show(c);
+            else show(1);
+          })
+          .catch(function () {
+            show(1);
+          });
+      } else {
+        fetch("/api/views", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: slug }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d && typeof d.count === "number") {
+              show(d.count);
+              try {
+                sessionStorage.setItem(viewedKey, "1");
+              } catch (e) {}
+            }
+          })
+          .catch(function () {});
+      }
     })();
   </script>
 </MainGridLayout>

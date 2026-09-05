@@ -340,6 +340,41 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		);
 	}
 
+	// ---- 修改密码（需登录，验证旧密码） ----
+	if (path === "/api/auth/change-password" && method === "POST") {
+		const user = await getSessionUser(env, request);
+		if (!user) return json({ error: "请先登录" }, 401);
+		if (await tooManyAttempts(env, `pwd:${clientIp(request)}`, 5, 900)) {
+			return json({ error: "尝试次数过多，请 15 分钟后再试" }, 429);
+		}
+		let body: any;
+		try {
+			body = await request.json();
+		} catch {
+			return json({ error: "请求格式错误" }, 400);
+		}
+		const oldPassword = String(body.oldPassword || "");
+		const newPassword = String(body.newPassword || "");
+		if (newPassword.length < 6) return json({ error: "新密码至少 6 位" }, 400);
+		if (newPassword.length > 128) return json({ error: "新密码过长" }, 400);
+
+		const row: any = await env.DB.prepare(`SELECT id, password_hash FROM users WHERE email = ?1`)
+			.bind(user.email)
+			.first();
+		if (!row || !(await verifyPassword(oldPassword, row.password_hash))) {
+			return json({ error: "旧密码不正确" }, 401);
+		}
+		const hash = await hashPassword(newPassword);
+		await env.DB.prepare(`UPDATE users SET password_hash = ?1 WHERE id = ?2`).bind(hash, row.id).run();
+		// 安全起见：改密后吊销该用户其他设备的会话，保留当前会话
+		await env.DB.prepare(
+			`DELETE FROM sessions WHERE user_id = ?1 AND token != ?2`,
+		)
+			.bind(row.id, parseCookies(request)[COOKIE])
+			.run();
+		return json({ ok: true });
+	}
+
 	// ---- 退出 ----
 	if (path === "/api/auth/logout" && method === "POST") {
 		const token = parseCookies(request)[COOKIE];
@@ -398,6 +433,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 			let deleted = false;
 			let hidden = false;
 			let authorEmail = "";
+			let published = "";
+			let category = "";
 			const raw = await fetchPostRaw(env, f.path);
 			if (raw) {
 				const { fm } = splitFrontmatter(raw);
@@ -405,8 +442,10 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 				deleted = /^deleted:\s*true\b/m.test(fm);
 				hidden = /^hidden:\s*true\b/m.test(fm);
 				authorEmail = parseFrontmatterField(fm, "authorEmail");
+				published = parseFrontmatterField(fm, "published");
+				category = parseFrontmatterField(fm, "category");
 			}
-			posts.push({ slug, title, deleted, hidden, authorEmail });
+			posts.push({ slug, title, deleted, hidden, authorEmail, published, category });
 		}
 		return json({ posts });
 	}
@@ -500,6 +539,94 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 			return json({ error: `删除失败（GitHub ${del.status}）`, detail: detail.slice(0, 200) }, 502);
 		}
 		return json({ ok: true });
+	}
+
+	// ---- 阅读量：浏览一篇文章时 +1 ----
+	if (path === "/api/views" && method === "POST") {
+		let body: any;
+		try {
+			body = await request.json();
+		} catch {
+			return json({ error: "请求格式错误" }, 400);
+		}
+		const slug = String(body.slug || "").trim();
+		if (!slug || slug.length > 200) return json({ error: "参数错误" }, 400);
+		try {
+			await env.DB.prepare(
+				`INSERT INTO post_views (slug, count) VALUES (?1, 1) ON CONFLICT(slug) DO UPDATE SET count = count + 1`,
+			)
+				.bind(slug)
+				.run();
+			const row: any = await env.DB.prepare(`SELECT count FROM post_views WHERE slug = ?1`).bind(slug).first();
+			return json({ ok: true, count: row?.count ?? 1 });
+		} catch {
+			return json({ error: "统计失败" }, 500);
+		}
+	}
+
+	// ---- 阅读量：批量查询（列表页用） ----
+	if (path === "/api/views" && method === "GET") {
+		const slugsParam = url.searchParams.get("slugs") || "";
+		const slugs = slugsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 50);
+		if (slugs.length === 0) return json({ counts: {} });
+		try {
+			const placeholders = slugs.map((_, i) => `?${i + 1}`).join(",");
+			const stmt = env.DB.prepare(`SELECT slug, count FROM post_views WHERE slug IN (${placeholders})`).bind(
+				...slugs,
+			);
+			const { results } = await stmt.all();
+			const counts: Record<string, number> = {};
+			for (const r of results || []) counts[(r as any).slug] = (r as any).count;
+			return json({ counts });
+		} catch {
+			return json({ counts: {} });
+		}
+	}
+
+	// ---- 阅读量：管理员全量（后台热度榜） ----
+	if (path === "/api/admin/views" && method === "GET") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员" }, 403);
+		const { results } = await env.DB.prepare(`SELECT slug, count FROM post_views ORDER BY count DESC`).all();
+		return json({ views: results || [] });
+	}
+
+	// ---- 公告：读取（公开） ----
+	if (path === "/api/announce" && method === "GET") {
+		try {
+			const row: any = await env.DB.prepare(`SELECT value, updated_at FROM site_config WHERE key = 'announcement'`).first();
+			return json({ text: row?.value || "", updatedAt: row?.updated_at || "" });
+		} catch {
+			return json({ text: "", updatedAt: "" });
+		}
+	}
+
+	// ---- 公告：发布 / 撤下（仅管理员） ----
+	if (path === "/api/admin/announce" && method === "POST") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员可以发布公告" }, 403);
+		let body: any;
+		try {
+			body = await request.json();
+		} catch {
+			return json({ error: "请求格式错误" }, 400);
+		}
+		const text = String(body.text || "").trim().slice(0, 500);
+		try {
+			if (!text) {
+				await env.DB.prepare(`DELETE FROM site_config WHERE key = 'announcement'`).run();
+				return json({ ok: true, cleared: true });
+			}
+			await env.DB.prepare(
+				`INSERT INTO site_config (key, value, updated_at) VALUES ('announcement', ?1, datetime('now'))
+				 ON CONFLICT(key) DO UPDATE SET value = ?1, updated_at = datetime('now')`,
+			)
+				.bind(text)
+				.run();
+			return json({ ok: true });
+		} catch {
+			return json({ error: "保存失败" }, 500);
+		}
 	}
 
 	return json({ error: "Not Found" }, 404);

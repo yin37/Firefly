@@ -19,6 +19,24 @@ const len = page.data.length;
 ---
 
 <MainGridLayout>
+  {
+    page.currentPage === 1 && (
+      <div
+        id="announce-bar"
+        class="hidden rounded-2xl border border-(--line-divider) bg-(--page-bg) px-5 py-3 mb-6 items-center gap-3 onload-animation"
+      >
+        <span class="text-lg">📣</span>
+        <span id="announce-bar-text" class="flex-1 text-sm text-[var(--primary)] opacity-90 break-all" />
+        <button
+          id="announce-bar-close"
+          aria-label="关闭公告"
+          class="opacity-50 hover:opacity-100 transition cursor-pointer text-lg leading-none"
+        >
+          ✕
+        </button>
+      </div>
+    )
+  }
   <PostPage page={page} />
   {
     page.total > page.size && (
@@ -67,4 +85,37 @@ const len = page.data.length;
     if (width < 1024) return "tablet";
     return "desktop";
   }
+</script>
+
+<script is:inline>
+  // 首页公告条：从服务器读取公告，访客关闭后本次会话不再显示
+  (function () {
+    var dismissed = null;
+    try {
+      dismissed = sessionStorage.getItem("ff_ann_dismiss");
+    } catch (e) {}
+    fetch("/api/announce")
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (d) {
+        var bar = document.getElementById("announce-bar");
+        if (!bar || !d || !d.text) return;
+        if (dismissed && dismissed === d.updatedAt) return;
+        var t = document.getElementById("announce-bar-text");
+        if (t) t.textContent = d.text;
+        bar.classList.remove("hidden");
+        bar.classList.add("flex");
+        var close = document.getElementById("announce-bar-close");
+        if (close)
+          close.addEventListener("click", function () {
+            bar.classList.add("hidden");
+            bar.classList.remove("flex");
+            try {
+              sessionStorage.setItem("ff_ann_dismiss", d.updatedAt);
+            } catch (e) {}
+          });
+      })
+      .catch(function () {});
+  })();
 </script>

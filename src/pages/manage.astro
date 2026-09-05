@@ -2,6 +2,7 @@
 import MainGridLayout from "@layouts/MainGridLayout.astro";
 
 // 站长内容管理：列出全部文章，已删除（软删除）标红，可恢复或彻底删除
+// 增强：状态筛选 / 标题搜索 / 发布日期与分类 / 阅读量热度 / 首页公告管理
 ---
 
 <MainGridLayout title="内容管理">
@@ -32,8 +33,43 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 			正在读取文章列表…
 		</div>
 
+		<!-- 工具栏：筛选 + 搜索（管理员可见） -->
+		<div id="manage-toolbar" class="hidden flex flex-wrap items-center gap-2 mb-4">
+			<div id="manage-tabs" class="flex gap-1.5 flex-wrap">
+				<button data-filter="all" class="manage-tab rounded-full px-3.5 py-1.5 text-sm transition cursor-pointer">全部</button>
+				<button data-filter="published" class="manage-tab rounded-full px-3.5 py-1.5 text-sm transition cursor-pointer">已发布</button>
+				<button data-filter="hidden" class="manage-tab rounded-full px-3.5 py-1.5 text-sm transition cursor-pointer">仅自己可见</button>
+				<button data-filter="deleted" class="manage-tab rounded-full px-3.5 py-1.5 text-sm transition cursor-pointer">已删除</button>
+			</div>
+			<input
+				id="manage-search"
+				type="search"
+				placeholder="搜索标题或路径…"
+				class="ml-auto w-56 rounded-lg px-3 py-1.5 text-sm bg-black/5 dark:bg-white/10 text-black/80 dark:text-white/80 outline-none focus:ring-2 ring-(--primary) transition"
+			/>
+			<span id="manage-count" class="text-xs opacity-50"></span>
+		</div>
+
 		<!-- 文章列表（管理员可见） -->
 		<div id="manage-list" class="hidden flex flex-col gap-3"></div>
+
+		<!-- 首页公告管理（管理员可见） -->
+		<div id="manage-announce" class="hidden rounded-2xl border border-(--line-divider) bg-(--page-bg) p-5 mt-6">
+			<h2 class="font-bold text-lg mb-1">📣 首页公告</h2>
+			<p class="opacity-50 text-xs mb-3">发布后显示在首页顶部，访客可关闭；留空并保存即撤下。最长 500 字。</p>
+			<textarea
+				id="announce-text"
+				rows="2"
+				maxlength="500"
+				placeholder="写一句公告，比如：博客改版啦，欢迎留言～"
+				class="w-full rounded-lg px-3 py-2 text-sm bg-black/5 dark:bg-white/10 text-black/80 dark:text-white/80 outline-none focus:ring-2 ring-(--primary) transition resize-y"
+			></textarea>
+			<p id="announce-msg" class="hidden text-xs mt-1"></p>
+			<div class="flex gap-2 mt-2">
+				<button id="announce-save" class="rounded-lg bg-(--primary) text-white dark:text-black/70 px-4 py-1.5 text-sm font-medium hover:opacity-85 active:scale-[0.98] transition cursor-pointer">发布公告</button>
+				<button id="announce-clear" class="rounded-lg bg-black/5 dark:bg-white/10 px-4 py-1.5 text-sm hover:opacity-85 active:scale-[0.98] transition cursor-pointer">撤下公告</button>
+			</div>
+		</div>
 
 		<div id="manage-error" class="hidden rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-500 text-sm"></div>
 	</div>
@@ -50,6 +86,11 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 				});
 			}
 
+			var allPosts = []; // 全量数据
+			var viewMap = {}; // slug -> 阅读量
+			var curFilter = "all";
+			var curSearch = "";
+
 			function showError(msg) {
 				var el = document.getElementById("manage-error");
 				el.textContent = msg;
@@ -62,17 +103,45 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 				});
 			}
 
+			function statusOf(p) {
+				if (p.deleted) return "deleted";
+				if (p.hidden) return "hidden";
+				return "published";
+			}
+
+			function applyFilter() {
+				var kw = curSearch.trim().toLowerCase();
+				var shown = allPosts.filter(function (p) {
+					if (curFilter !== "all" && statusOf(p) !== curFilter) return false;
+					if (kw && String(p.title).toLowerCase().indexOf(kw) < 0 && String(p.slug).toLowerCase().indexOf(kw) < 0)
+						return false;
+					return true;
+				});
+				document.getElementById("manage-count").textContent =
+					"共 " + shown.length + " 篇" + (allPosts.length !== shown.length ? " / 总 " + allPosts.length + " 篇" : "");
+				render(shown);
+			}
+
 			function render(posts) {
 				var list = document.getElementById("manage-list");
 				document.getElementById("manage-loading").classList.add("hidden");
 				list.classList.remove("hidden");
 				list.style.display = "flex";
+				if (!posts.length) {
+					list.innerHTML = '<div class="opacity-50 text-sm text-center py-8">没有符合条件的文章</div>';
+					return;
+				}
 				list.innerHTML = posts
 					.map(function (p) {
 						var badges = "";
 						if (p.deleted) badges += '<span class="rounded-full bg-red-500/15 text-red-500 dark:text-red-400 px-2.5 py-0.5 text-xs font-bold">已删除（全站隐藏）</span>';
 						if (p.hidden) badges += '<span class="rounded-full bg-(--btn-regular-bg) px-2.5 py-0.5 text-xs opacity-70">仅自己可见</span>';
 						if (!p.deleted && !p.hidden) badges += '<span class="rounded-full bg-green-500/15 text-green-600 dark:text-green-400 px-2.5 py-0.5 text-xs">已发布</span>';
+						var meta = [];
+						if (p.published) meta.push(esc(String(p.published).slice(0, 10)));
+						if (p.category) meta.push(esc(p.category));
+						var views = typeof viewMap[p.slug] === "number" ? viewMap[p.slug] : null;
+						meta.push(views === null ? "👁 --" : "👁 " + views);
 						var restoreLabel = p.deleted ? "恢复" : "隐藏";
 						return (
 							'<div class="rounded-2xl border ' +
@@ -85,6 +154,8 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 							esc(p.title) +
 							"</div>" +
 							'<div class="text-xs opacity-50 mt-0.5">' +
+							meta.join(" · ") +
+							" · " +
 							esc(p.slug) +
 							"</div>" +
 							"</div>" +
@@ -131,17 +202,33 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 			}
 
 			function load() {
-				fetch("/api/admin/posts")
-					.then(function (r) {
+				Promise.all([
+					fetch("/api/admin/posts").then(function (r) {
 						return r.json().then(function (d) {
 							return { ok: r.ok, d: d };
 						});
-					})
+					}),
+					fetch("/api/admin/views").then(function (r) {
+						return r.json().catch(function () {
+							return { views: [] };
+						});
+					}),
+				])
 					.then(function (res) {
-						if (res.ok && res.d.posts) {
+						var postsRes = res[0];
+						var viewsRes = res[1];
+						if (postsRes.ok && postsRes.d.posts) {
 							document.getElementById("manage-gate").classList.add("hidden");
-							render(res.d.posts);
-						} else if (res.d && res.d.error === "服务器未配置 GitHub 令牌") {
+							allPosts = postsRes.d.posts;
+							(viewsRes.views || []).forEach(function (v) {
+								viewMap[v.slug] = v.count;
+							});
+							// 热度高的排前面（仅"全部"视图）
+							allPosts.sort(function (a, b) {
+								return (viewMap[b.slug] || 0) - (viewMap[a.slug] || 0);
+							});
+							applyFilter();
+						} else if (postsRes.d && postsRes.d.error === "服务器未配置 GitHub 令牌") {
 							document.getElementById("manage-loading").classList.add("hidden");
 							showError("⚠️ 服务器尚未配置 GitHub 令牌，隐藏/删除功能不可用。");
 						}
@@ -152,6 +239,73 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 						showError("加载失败，请刷新重试。");
 					});
 			}
+
+			// ---- 工具栏交互 ----
+			function paintTabs() {
+				document.querySelectorAll(".manage-tab").forEach(function (t) {
+					var active = t.getAttribute("data-filter") === curFilter;
+					t.classList.toggle("bg-(--primary)", active);
+					t.classList.toggle("text-white", active);
+					t.classList.toggle("dark:text-black/70", active);
+					t.classList.toggle("opacity-60", !active);
+				});
+			}
+			document.getElementById("manage-tabs").addEventListener("click", function (e) {
+				var t = e.target && e.target.closest ? e.target.closest(".manage-tab") : null;
+				if (!t) return;
+				curFilter = t.getAttribute("data-filter");
+				paintTabs();
+				applyFilter();
+			});
+			document.getElementById("manage-search").addEventListener("input", function () {
+				curSearch = this.value || "";
+				applyFilter();
+			});
+
+			// ---- 公告管理 ----
+			var annText = document.getElementById("announce-text");
+			var annMsg = document.getElementById("announce-msg");
+			function annShowMsg(t, ok) {
+				annMsg.textContent = t;
+				annMsg.classList.remove("hidden");
+				annMsg.classList.toggle("text-red-500", !ok);
+				annMsg.classList.toggle("text-green-600", !!ok);
+				annMsg.classList.toggle("dark:text-green-400", !!ok);
+				if (t) setTimeout(function () { annMsg.classList.add("hidden"); }, 3000);
+			}
+			function annSave(clear) {
+				var text = clear ? "" : (annText.value || "").trim();
+				if (!clear && !text) return annShowMsg("公告内容不能为空", false);
+				fetch("/api/admin/announce", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ text: text }),
+				})
+					.then(function (r) {
+						return r.json();
+					})
+					.then(function (d) {
+						if (d && d.ok) annShowMsg(clear ? "公告已撤下 ✓" : "公告已发布 ✓", true);
+						else annShowMsg((d && d.error) || "保存失败", false);
+					})
+					.catch(function () {
+						annShowMsg("网络错误，请重试", false);
+					});
+			}
+			document.getElementById("announce-save").addEventListener("click", function () {
+				annSave(false);
+			});
+			document.getElementById("announce-clear").addEventListener("click", function () {
+				annSave(true);
+			});
+			fetch("/api/announce")
+				.then(function (r) {
+					return r.json();
+				})
+				.then(function (d) {
+					if (d && d.text && annText) annText.value = d.text;
+				})
+				.catch(function () {});
 
 			document.addEventListener("click", function (e) {
 				var btn = e.target && e.target.closest ? e.target.closest("#manage-list button") : null;
@@ -198,7 +352,10 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 				.then(function (d) {
 					if (d && d.user && d.user.isAdmin) {
 						document.getElementById("manage-gate").classList.add("hidden");
+						document.getElementById("manage-toolbar").classList.remove("hidden");
+						document.getElementById("manage-announce").classList.remove("hidden");
 						document.getElementById("manage-loading").classList.remove("hidden");
+						paintTabs();
 						load();
 					}
 					// 非管理员保持门禁
