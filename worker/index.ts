@@ -144,6 +144,100 @@ function validEmail(email: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// ---- GitHub 内容 API 辅助（隐藏/恢复/删除文章用） ----
+function ghEnv(env: Env) {
+	return {
+		token: env.GH_TOKEN || "",
+		repo: env.GITHUB_REPO || "yin37/Firefly",
+		branch: env.GITHUB_BRANCH || "master",
+	};
+}
+
+function ghHeaders(token: string, raw = false): Record<string, string> {
+	return {
+		Authorization: `Bearer ${token}`,
+		Accept: raw ? "application/vnd.github.raw" : "application/vnd.github+json",
+		"User-Agent": "firefly-blog",
+		"Content-Type": "application/json",
+	};
+}
+
+function encPath(p: string): string {
+	return p.split("/").map(encodeURIComponent).join("/");
+}
+
+// 按常见命名规则定位文章源文件
+async function findPostFile(env: Env, slug: string): Promise<{ path: string; sha: string } | null> {
+	const { token, repo, branch } = ghEnv(env);
+	const candidates = [
+		`src/content/posts/${slug}.md`,
+		`src/content/posts/${slug}.mdx`,
+		`src/content/posts/${slug}/index.md`,
+		`src/content/posts/${slug}/index.mdx`,
+	];
+	for (const p of candidates) {
+		const r = await fetch(
+			`https://api.github.com/repos/${repo}/contents/${encPath(p)}?ref=${encodeURIComponent(branch)}`,
+			{ headers: ghHeaders(token) },
+		);
+		if (r.ok) {
+			const j: any = await r.json();
+			if (!Array.isArray(j)) return { path: j.path as string, sha: j.sha as string };
+		}
+		if (r.status === 401 || r.status === 403) throw new Error("GH_AUTH");
+	}
+	return null;
+}
+
+async function fetchPostRaw(env: Env, path: string): Promise<string | null> {
+	const { token, repo, branch } = ghEnv(env);
+	const r = await fetch(
+		`https://api.github.com/repos/${repo}/contents/${encPath(path)}?ref=${encodeURIComponent(branch)}`,
+		{ headers: ghHeaders(token, true) },
+	);
+	if (!r.ok) return null;
+	return r.text();
+}
+
+// UTF-8 安全 base64（btoa 不支持非 ASCII，分块转换避免栈溢出）
+function utf8ToBase64(text: string): string {
+	const bytes = new TextEncoder().encode(text);
+	let bin = "";
+	const CHUNK = 0x8000;
+	for (let i = 0; i < bytes.length; i += CHUNK) {
+		bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)) as any);
+	}
+	return btoa(bin);
+}
+
+// 在 frontmatter 中设置布尔标记（存在则替换，不存在则插入到 --- 之后）
+function setFrontmatterFlag(content: string, key: string, value: boolean): string {
+	const re = new RegExp(`^${key}:.*$`, "m");
+	if (re.test(content)) return content.replace(re, `${key}: ${value}`);
+	return content.replace(/^---\n/, `---\n${key}: ${value}\n`);
+}
+
+// 从 frontmatter 原文提取单值字段
+function parseFrontmatterField(fm: string, key: string): string {
+	const m = fm.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+	if (!m) return "";
+	return m[1].trim().replace(/^["']|["']$/g, "");
+}
+
+// 解析 markdown 的 frontmatter 区块
+function splitFrontmatter(raw: string): { fm: string; body: string } {
+	const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+	if (!m) return { fm: "", body: raw };
+	return { fm: m[1], body: raw.slice(m[0].length) };
+}
+
+// 权限：管理员，或文章 frontmatter 记录的发布者邮箱与当前登录邮箱一致
+function canManagePost(user: { email: string; isAdmin: boolean }, authorEmail: string): boolean {
+	if (user.isAdmin) return true;
+	const a = (authorEmail || "").trim().toLowerCase();
+	return a !== "" && a === user.email.toLowerCase();
+}
+
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
 	const path = url.pathname;
 	const method = request.method;
@@ -231,10 +325,112 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		return json({ password: env.PRIVATE_PASSWORD || "" });
 	}
 
-	// ---- 删除文章（仅管理员）：通过 GitHub API 删除源文件，触发自动重建 ----
+	// ---- 后台文章列表（仅管理员）：标题 + 删除/隐藏状态 ----
+	if (path === "/api/admin/posts" && method === "GET") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员可以查看" }, 403);
+		const { token } = ghEnv(env);
+		if (!token) return json({ error: "服务器未配置 GitHub 令牌" }, 500);
+		const { repo, branch } = ghEnv(env);
+
+		// 递归列出文章目录（含子目录，如 guide/）
+		async function listDir(dir: string): Promise<any[]> {
+			const r = await fetch(
+				`https://api.github.com/repos/${repo}/contents/${encPath(dir)}?ref=${encodeURIComponent(branch)}`,
+				{ headers: ghHeaders(token) },
+			);
+			if (!r.ok) return [];
+			const arr: any[] = await r.json();
+			const files: any[] = [];
+			for (const item of arr) {
+				if (item.type === "file" && /\.(md|mdx)$/i.test(item.name)) files.push(item);
+				else if (item.type === "dir") files.push(...(await listDir(item.path)));
+			}
+			return files;
+		}
+
+		const files = await listDir("src/content/posts");
+		const posts: any[] = [];
+		for (const f of files) {
+			const slug = String(f.path)
+				.replace(/^src\/content\/posts\//, "")
+				.replace(/\.(md|mdx)$/i, "");
+			let title = slug;
+			let deleted = false;
+			let hidden = false;
+			let authorEmail = "";
+			const raw = await fetchPostRaw(env, f.path);
+			if (raw) {
+				const { fm } = splitFrontmatter(raw);
+				title = parseFrontmatterField(fm, "title") || slug;
+				deleted = /^deleted:\s*true\b/m.test(fm);
+				hidden = /^hidden:\s*true\b/m.test(fm);
+				authorEmail = parseFrontmatterField(fm, "authorEmail");
+			}
+			posts.push({ slug, title, deleted, hidden, authorEmail });
+		}
+		return json({ posts });
+	}
+
+	// ---- 隐藏 / 恢复文章（软删除，管理员或发布者本人） ----
+	if (path === "/api/admin/set-deleted" && method === "POST") {
+		const user = await getSessionUser(env, request);
+		if (!user) return json({ error: "请先登录" }, 401);
+		const { token } = ghEnv(env);
+		if (!token) return json({ error: "服务器未配置 GitHub 令牌，暂时无法删除" }, 500);
+
+		let body: any;
+		try {
+			body = await request.json();
+		} catch {
+			return json({ error: "请求格式错误" }, 400);
+		}
+		const slug = String(body.slug || "").trim();
+		const deleted = body.deleted === true;
+		if (!slug || slug.includes("..") || slug.startsWith("/")) return json({ error: "参数错误" }, 400);
+
+		let file: { path: string; sha: string } | null = null;
+		try {
+			file = await findPostFile(env, slug);
+		} catch (e: any) {
+			if (e && e.message === "GH_AUTH") return json({ error: "GitHub 令牌无效或权限不足" }, 500);
+			throw e;
+		}
+		if (!file) return json({ error: "未找到对应的文章文件" }, 404);
+
+		const raw = await fetchPostRaw(env, file.path);
+		if (raw === null) return json({ error: "读取文章失败" }, 502);
+		const { fm } = splitFrontmatter(raw);
+		const authorEmail = parseFrontmatterField(fm, "authorEmail");
+		if (!canManagePost(user, authorEmail)) {
+			return json({ error: "只有管理员或文章发布者可以删除" }, 403);
+		}
+
+		const newContent = setFrontmatterFlag(raw, "deleted", deleted);
+		const { repo, branch } = ghEnv(env);
+		const put = await fetch(`https://api.github.com/repos/${repo}/contents/${encPath(file.path)}`, {
+			method: "PUT",
+			headers: ghHeaders(token),
+			body: JSON.stringify({
+				message: `${deleted ? "删除（隐藏）" : "恢复"}文章：${slug}`,
+				content: utf8ToBase64(newContent),
+				sha: file.sha,
+				branch,
+			}),
+		});
+		if (!put.ok) {
+			const detail = await put.text().catch(() => "");
+			return json({ error: `操作失败（GitHub ${put.status}）`, detail: detail.slice(0, 200) }, 502);
+		}
+		return json({ ok: true, deleted });
+	}
+
+	// ---- 彻底删除文章（仅管理员，后台二次确认后调用） ----
 	if (path === "/api/admin/delete-article" && method === "POST") {
 		const user = await getSessionUser(env, request);
-		if (!user || !user.isAdmin) return json({ error: "仅管理员可以删除文章" }, 403);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员可以彻底删除文章" }, 403);
+		const { token } = ghEnv(env);
+		if (!token) return json({ error: "服务器未配置 GitHub 令牌，暂时无法删除" }, 500);
 
 		let body: any;
 		try {
@@ -245,46 +441,20 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		const slug = String(body.slug || "").trim();
 		if (!slug || slug.includes("..") || slug.startsWith("/")) return json({ error: "参数错误" }, 400);
 
-		const token = env.GH_TOKEN;
-		if (!token) return json({ error: "服务器未配置 GitHub 令牌，暂时无法删除" }, 500);
-		const repo = env.GITHUB_REPO || "yin37/Firefly";
-		const branch = env.GITHUB_BRANCH || "master";
-		const ghHeaders: Record<string, string> = {
-			Authorization: `Bearer ${token}`,
-			Accept: "application/vnd.github+json",
-			"User-Agent": "firefly-blog",
-			"Content-Type": "application/json",
-		};
-		const encPath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
-
-		// 按常见命名规则找到源文件
-		const candidates = [
-			`src/content/posts/${slug}.md`,
-			`src/content/posts/${slug}.mdx`,
-			`src/content/posts/${slug}/index.md`,
-			`src/content/posts/${slug}/index.mdx`,
-		];
-		let found: any = null;
-		for (const p of candidates) {
-			const r = await fetch(
-				`https://api.github.com/repos/${repo}/contents/${encPath(p)}?ref=${encodeURIComponent(branch)}`,
-				{ headers: ghHeaders },
-			);
-			if (r.ok) {
-				found = await r.json();
-				break;
-			}
-			if (r.status === 401 || r.status === 403) {
-				return json({ error: "GitHub 令牌无效或权限不足" }, 500);
-			}
+		let file: { path: string; sha: string } | null = null;
+		try {
+			file = await findPostFile(env, slug);
+		} catch (e: any) {
+			if (e && e.message === "GH_AUTH") return json({ error: "GitHub 令牌无效或权限不足" }, 500);
+			throw e;
 		}
-		if (!found) return json({ error: "未找到对应的文章文件" }, 404);
-		if (Array.isArray(found)) return json({ error: "文章路径异常" }, 400);
+		if (!file) return json({ error: "未找到对应的文章文件" }, 404);
 
-		const del = await fetch(`https://api.github.com/repos/${repo}/contents/${encPath(found.path)}`, {
+		const { repo, branch } = ghEnv(env);
+		const del = await fetch(`https://api.github.com/repos/${repo}/contents/${encPath(file.path)}`, {
 			method: "DELETE",
-			headers: ghHeaders,
-			body: JSON.stringify({ message: `删除文章：${slug}`, sha: found.sha, branch }),
+			headers: ghHeaders(token),
+			body: JSON.stringify({ message: `彻底删除文章：${slug}`, sha: file.sha, branch }),
 		});
 		if (!del.ok) {
 			const detail = await del.text().catch(() => "");

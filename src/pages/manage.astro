@@ -1,0 +1,209 @@
+---
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+
+// 站长内容管理：列出全部文章，已删除（软删除）标红，可恢复或彻底删除
+---
+
+<MainGridLayout title="内容管理">
+	<meta slot="head" name="robots" content="noindex, nofollow" />
+	<div class="w-full max-w-[var(--page-width)] mx-auto px-4 flex-1">
+		<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-6 mb-6">
+			<h1 class="text-3xl font-bold mb-2 transition">🗂 内容管理</h1>
+			<p class="text-[var(--primary)] opacity-80 text-lg">
+				删除的文章全站隐藏并<span class="text-red-500 font-bold">标红显示</span>，可恢复；彻底删除需二次确认
+			</p>
+			<p class="opacity-60 text-sm mt-1">本页仅站长账号可用。</p>
+		</div>
+
+		<!-- 未登录/非管理员提示（默认显示） -->
+		<div id="manage-gate" class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-8 text-center">
+			<p class="text-lg font-bold mb-2">🔒 站长专属</p>
+			<p class="opacity-60 text-sm mb-5">内容管理仅站长账号可用，请先登录。</p>
+			<a
+				href="/login/?redirect=%2Fmanage%2F"
+				id="manage-gate-login"
+				class="inline-block rounded-lg bg-(--primary) text-white dark:text-black/70 px-5 py-2 text-sm font-medium hover:opacity-85 transition"
+			>
+				登录
+			</a>
+		</div>
+
+		<div id="manage-loading" class="hidden rounded-2xl border border-(--line-divider) bg-(--page-bg) p-8 text-center opacity-60">
+			正在读取文章列表…
+		</div>
+
+		<!-- 文章列表（管理员可见） -->
+		<div id="manage-list" class="hidden flex flex-col gap-3"></div>
+
+		<div id="manage-error" class="hidden rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-red-500 text-sm"></div>
+	</div>
+
+	<script is:inline>
+		(function () {
+			var gateBtn = document.getElementById("manage-gate-login");
+			if (gateBtn) {
+				gateBtn.addEventListener("click", function (e) {
+					if (document.getElementById("auth-overlay")) {
+						e.preventDefault();
+						document.dispatchEvent(new CustomEvent("open-auth-modal"));
+					}
+				});
+			}
+
+			function showError(msg) {
+				var el = document.getElementById("manage-error");
+				el.textContent = msg;
+				el.classList.remove("hidden");
+			}
+
+			function esc(s) {
+				return String(s).replace(/[&<>"']/g, function (c) {
+					return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+				});
+			}
+
+			function render(posts) {
+				var list = document.getElementById("manage-list");
+				document.getElementById("manage-loading").classList.add("hidden");
+				list.classList.remove("hidden");
+				list.style.display = "flex";
+				list.innerHTML = posts
+					.map(function (p) {
+						var badges = "";
+						if (p.deleted) badges += '<span class="rounded-full bg-red-500/15 text-red-500 dark:text-red-400 px-2.5 py-0.5 text-xs font-bold">已删除（全站隐藏）</span>';
+						if (p.hidden) badges += '<span class="rounded-full bg-(--btn-regular-bg) px-2.5 py-0.5 text-xs opacity-70">仅自己可见</span>';
+						if (!p.deleted && !p.hidden) badges += '<span class="rounded-full bg-green-500/15 text-green-600 dark:text-green-400 px-2.5 py-0.5 text-xs">已发布</span>';
+						var restoreLabel = p.deleted ? "恢复" : "隐藏";
+						return (
+							'<div class="rounded-2xl border ' +
+							(p.deleted ? "border-red-500/50 bg-red-500/5" : "border-(--line-divider) bg-(--page-bg)") +
+							' p-4 flex flex-wrap items-center gap-3">' +
+							'<div class="flex-1 min-w-[12rem]">' +
+							'<div class="font-bold text-lg ' +
+							(p.deleted ? "text-red-500 dark:text-red-400 line-through" : "text-[var(--primary)]") +
+							'">' +
+							esc(p.title) +
+							"</div>" +
+							'<div class="text-xs opacity-50 mt-0.5">' +
+							esc(p.slug) +
+							"</div>" +
+							"</div>" +
+							'<div class="flex gap-2 flex-wrap">' +
+							badges +
+							"</div>" +
+							'<div class="flex gap-2 ml-auto">' +
+							'<a href="/admin/#/collections/posts/entries/' +
+							encodeURIComponent(p.slug) +
+							'" target="_blank" rel="noopener" class="rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-3 py-1.5 text-sm transition">编辑</a>' +
+							'<button data-act="toggle" data-slug="' +
+							esc(p.slug) +
+							'" data-deleted="' +
+							(p.deleted ? "1" : "0") +
+							'" class="rounded-lg px-3 py-1.5 text-sm transition bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) cursor-pointer">' +
+							restoreLabel +
+							"</button>" +
+							'<button data-act="hard-delete" data-slug="' +
+							esc(p.slug) +
+							'" class="rounded-lg px-3 py-1.5 text-sm transition bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 cursor-pointer">彻底删除</button>' +
+							"</div></div>"
+						);
+					})
+					.join("");
+			}
+
+			function setRowBusy(slug, busy) {
+				document.querySelectorAll('#manage-list button[data-slug="' + CSS.escape(slug) + '"]').forEach(function (b) {
+					b.disabled = busy;
+					b.style.opacity = busy ? "0.5" : "";
+				});
+			}
+
+			function api(url, body) {
+				return fetch(url, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+				}).then(function (r) {
+					return r.json().then(function (d) {
+						return { ok: r.ok, d: d };
+					});
+				});
+			}
+
+			function load() {
+				fetch("/api/admin/posts")
+					.then(function (r) {
+						return r.json().then(function (d) {
+							return { ok: r.ok, d: d };
+						});
+					})
+					.then(function (res) {
+						if (res.ok && res.d.posts) {
+							document.getElementById("manage-gate").classList.add("hidden");
+							render(res.d.posts);
+						} else if (res.d && res.d.error === "服务器未配置 GitHub 令牌") {
+							document.getElementById("manage-loading").classList.add("hidden");
+							showError("⚠️ 服务器尚未配置 GitHub 令牌，隐藏/删除功能不可用。");
+						}
+						// 403 = 非管理员：保持门禁
+					})
+					.catch(function () {
+						document.getElementById("manage-loading").classList.add("hidden");
+						showError("加载失败，请刷新重试。");
+					});
+			}
+
+			document.addEventListener("click", function (e) {
+				var btn = e.target && e.target.closest ? e.target.closest("#manage-list button") : null;
+				if (!btn) return;
+				var slug = btn.getAttribute("data-slug");
+				var act = btn.getAttribute("data-act");
+
+				if (act === "toggle") {
+					var willDelete = btn.getAttribute("data-deleted") !== "1";
+					if (willDelete && !confirm("删除「" + slug + "」？删除后全站不可见，可随时恢复。")) return;
+					if (!willDelete && !confirm("恢复「" + slug + "」？恢复后重新出现在网站各列表。")) return;
+					setRowBusy(slug, true);
+					api("/api/admin/set-deleted", { slug: slug, deleted: willDelete }).then(function (res) {
+						if (res.ok) {
+							load();
+						} else {
+							setRowBusy(slug, false);
+							alert((res.d && res.d.error) || "操作失败");
+						}
+					}).catch(function () { setRowBusy(slug, false); alert("网络错误，请重试"); });
+				}
+
+				if (act === "hard-delete") {
+					// 二次确认：删除后源文件不可恢复
+					if (!confirm("⚠️ 彻底删除「" + slug + "」？\n文章源文件将从仓库移除，此操作不可恢复！")) return;
+					if (!confirm("【二次确认】真的要彻底删除吗？\n\n· 仅隐藏请点「隐藏」\n· 彻底删除后无法找回\n\n确认请按「确定」")) return;
+					setRowBusy(slug, true);
+					api("/api/admin/delete-article", { slug: slug }).then(function (res) {
+						if (res.ok) {
+							alert("已彻底删除，网站将在几分钟内自动更新。");
+							load();
+						} else {
+							setRowBusy(slug, false);
+							alert((res.d && res.d.error) || "删除失败");
+						}
+					}).catch(function () { setRowBusy(slug, false); alert("网络错误，请重试"); });
+				}
+			});
+
+			fetch("/api/auth/me")
+				.then(function (r) {
+					return r.json();
+				})
+				.then(function (d) {
+					if (d && d.user && d.user.isAdmin) {
+						document.getElementById("manage-gate").classList.add("hidden");
+						document.getElementById("manage-loading").classList.remove("hidden");
+						load();
+					}
+					// 非管理员保持门禁
+				})
+				.catch(function () {});
+		})();
+	</script>
+</MainGridLayout>

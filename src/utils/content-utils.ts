@@ -6,6 +6,8 @@ import { getCategoryUrl } from "@utils/url-utils";
 // // Retrieve posts and sort them by publication date
 async function getRawSortedPosts(includeHidden = false) {
 	const allBlogPosts = await getCollection("posts", ({ data }) => {
+		// deleted: 已删除的文章全站不可见（列表、书架、文章页一律不生成）
+		if (data.deleted === true) return false;
 		if (!import.meta.env.PROD) return true;
 		if (data.draft === true) return false;
 		// hidden: 仅自己可见 —— 不出现在任何列表，但文章页面仍可访问

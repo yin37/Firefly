@@ -24,6 +24,8 @@ type PostData = {
 	passwordHint: string;
 	series: string;
 	seriesOrder?: number;
+	deleted: boolean;
+	authorEmail: string;
 	prevTitle: string;
 	prevSlug: string;
 	nextTitle: string;
@@ -64,6 +66,10 @@ const postsCollection: ContentCollection<PostData> = defineCollection({
 		passwordHint: z.string().optional().default(""),
 		series: z.string().optional().default(""),
 		seriesOrder: z.number().optional(),
+		/* deleted: 后台「删除」= 软删除，全站隐藏；彻底删除由后台移除源文件 */
+		deleted: z.boolean().optional().default(false),
+		/* authorEmail: 发布者邮箱，匹配的登录用户可管理（隐藏/恢复）自己的文章 */
+		authorEmail: z.string().optional().default(""),
 
 		/* For internal use */
 		prevTitle: z.string().default(""),

@@ -590,10 +590,11 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
         <button
           id="admin-delete-btn"
           data-slug={removeFileExtension(entry.id)}
+          data-author-email={entry.data.authorEmail || ""}
           class="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 active:scale-95 transition cursor-pointer"
         >
           <Icon name="material-symbols:delete-outline" class="text-base" />
-          <span>删除这篇文章</span>
+          <span>删除</span>
         </button>
         <a
           href={adminEditUrl}
@@ -602,7 +603,7 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
           class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium bg-(--btn-regular-bg) text-(--btn-content) hover:bg-(--btn-hover-bg) active:scale-95 transition"
         >
           <Icon name="material-symbols:edit-outline" class="text-base" />
-          <span>编辑这篇文章</span>
+          <span>编辑</span>
         </a>
       </div>
     </div>
@@ -730,16 +731,26 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
   {entry.data.comment && !effectivePassword && <Comment post={entry} />}
 
   <script is:inline>
-    // 站长删除按钮：仅管理员可见；删除走 Worker → GitHub API → 自动重建
+    // 「删除」按钮：仅管理员或文章发布者（frontmatter authorEmail 匹配登录邮箱）可见
+    // 点击 = 软删除（隐藏）：写入 deleted: true → 自动重建 → 全站不可见
+    // 彻底删除在 /manage/ 后台二次确认后进行
     (() => {
       var btn = document.getElementById("admin-delete-btn");
       if (!btn) return;
       var slug = btn.getAttribute("data-slug") || "";
+      var authorEmail = (btn.getAttribute("data-author-email") || "").trim().toLowerCase();
       var busy = false;
+      var currentUser = null;
 
       function show() {
         btn.classList.remove("hidden");
         btn.classList.add("inline-flex");
+      }
+
+      function canManage(user) {
+        if (!user) return false;
+        if (user.isAdmin) return true;
+        return authorEmail !== "" && user.email && user.email.toLowerCase() === authorEmail;
       }
 
       // 优先用导航栏登录状态缓存，避免重复请求
@@ -747,34 +758,42 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
       try {
         cached = JSON.parse(sessionStorage.getItem("ff_me_cache"));
       } catch (e) {}
-      if (cached && cached.exp > Date.now() && cached.user) {
-        if (cached.user.isAdmin) show();
+      if (cached && cached.exp > Date.now()) {
+        currentUser = cached.user || null;
+        if (canManage(currentUser)) show();
       } else {
         fetch("/api/auth/me")
           .then(function (r) {
             return r.json();
           })
           .then(function (d) {
-            var u = d && d.user;
+            currentUser = d && d.user ? d.user : null;
             try {
-              sessionStorage.setItem("ff_me_cache", JSON.stringify({ user: u, exp: Date.now() + 600000 }));
+              sessionStorage.setItem("ff_me_cache", JSON.stringify({ user: currentUser, exp: Date.now() + 600000 }));
             } catch (e) {}
-            if (u && u.isAdmin) show();
+            if (canManage(currentUser)) show();
           })
           .catch(function () {});
       }
 
       btn.addEventListener("click", function () {
         if (busy) return;
-        if (!confirm("确定要删除这篇文章「" + slug + "」吗？\n删除后不可恢复，网站将在 1~3 分钟内自动更新。")) return;
+        if (
+          !confirm(
+            "删除「" +
+              slug +
+              "」？\n删除后访客将无法看到这篇文章，可在后台恢复或彻底删除。\n（网站将在几分钟内自动更新）",
+          )
+        )
+          return;
         busy = true;
         var label = btn.querySelector("span");
         var oldText = label ? label.textContent : "";
         if (label) label.textContent = "删除中…";
-        fetch("/api/admin/delete-article", {
+        fetch("/api/admin/set-deleted", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slug: slug }),
+          body: JSON.stringify({ slug: slug, deleted: true }),
         })
           .then(function (r) {
             return r.json().then(function (d) {
@@ -786,7 +805,7 @@ const adminEditUrl = `${url("/admin/")}#/collections/posts/entries/${removeFileE
               if (label) label.textContent = "已删除 ✓ 正在返回主页…";
               setTimeout(function () {
                 location.href = "/";
-              }, 1200);
+              }, 1500);
             } else {
               busy = false;
               if (label) label.textContent = (res.d && res.d.error) || "删除失败";

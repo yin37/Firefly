@@ -73,6 +73,15 @@ collections:
         widget: boolean
         default: false
         required: false
+      - label: 已删除标记（后台「删除/恢复」自动维护，请勿手动修改）
+        name: deleted
+        widget: hidden
+        default: false
+        required: false
+      - label: 发布者邮箱（填写后该邮箱登录的用户可删除/编辑这篇文章，留空仅站长可管理）
+        name: authorEmail
+        widget: string
+        required: false
       - label: 封面图（可选）
         name: image
         widget: image

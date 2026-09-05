@@ -51,10 +51,16 @@ function formatDate(d: Date): string {
 		<div id="admin-toolbar" class="hidden rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4 mb-4 flex flex-wrap gap-3 items-center text-sm">
 			<span class="opacity-60">管理员模式</span>
 			<a
+				href="/manage/"
+				class="rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-3 py-1.5 transition"
+			>
+				🗂 删除 / 隐藏管理
+			</a>
+			<a
 				href="/admin/"
 				class="rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-3 py-1.5 transition"
 			>
-				✏️ 后台管理文章（编辑 / 显示隐藏 / 删除）
+				✏️ 后台编辑文章
 			</a>
 			<a href="/login/" class="opacity-50 hover:opacity-90 transition">账号设置</a>
 		</div>
