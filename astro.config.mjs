@@ -51,6 +51,7 @@ import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
 import { remarkImageGrid } from "./src/plugins/remark-image-grid.js";
 import { remarkMermaid } from "./src/plugins/remark-mermaid.js";
 import { remarkPlantuml } from "./src/plugins/remark-plantuml.js";
+import { remarkVideoEmbed } from "./src/plugins/remark-video-embed.mjs";
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
 import { remarkWikiLink } from "./src/plugins/remark-wiki-link.js";
 import { collectUsedFontCssVars } from "./src/utils/fontHelper";
@@ -292,6 +293,7 @@ export default defineConfig({
 					: []),
 				remarkMath,
 				remarkReadingTime,
+				remarkVideoEmbed, /* B站/YouTube 裸链接自动转站内播放器 */
 				remarkWikiLink,
 				remarkImageGrid,
 				remarkExcerpt,
