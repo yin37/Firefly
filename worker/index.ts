@@ -257,7 +257,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		if (password.length > 128) return json({ error: "密码过长" }, 400);
 
 		const exists: any = await env.DB.prepare(`SELECT id FROM users WHERE email = ?1`).bind(email).first();
-		if (exists) return json({ error: "该邮箱已注册，请直接登录" }, 409);
+		if (exists) return json({ error: "该邮箱已注册，请直接登录", code: "ALREADY_EXISTS" }, 409);
 
 		const hash = await hashPassword(password);
 		let result: any;
@@ -290,8 +290,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		const row: any = await env.DB.prepare(`SELECT id, password_hash FROM users WHERE email = ?1`)
 			.bind(email)
 			.first();
-		if (!row || !(await verifyPassword(password, row.password_hash))) {
-			return json({ error: "邮箱或密码错误" }, 401);
+		if (!row) {
+			// 账号不存在：明确提示去注册（前端会自动切到注册页签并带入邮箱）
+			return json({ error: `该邮箱（${email}）尚未注册，请先注册账号`, code: "NO_ACCOUNT" }, 401);
+		}
+		if (!(await verifyPassword(password, row.password_hash))) {
+			return json({ error: "密码错误，请重试", code: "WRONG_PASSWORD" }, 401);
 		}
 		const token = await createSession(env, row.id);
 		return json(

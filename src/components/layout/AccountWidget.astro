@@ -140,169 +140,235 @@ import { url } from "@/utils/url-utils";
 </style>
 
 <script>
+	// 全部用 document 级事件委托：Swup 切页替换 DOM 后依然有效，不会出现“点了没反应”
 	(function () {
 		if (window.__authWidgetInit) return;
 		window.__authWidgetInit = true;
 
-		var overlay = document.getElementById("auth-overlay");
-		var card = document.getElementById("auth-card");
-		var btn = document.getElementById("auth-switch");
-		if (!overlay || !btn) return;
+		var ME_CACHE = "ff_me_cache";
 
-		// 把弹窗移到 body 根节点，避免导航栏层叠上下文/变换影响 fixed 定位
-		if (overlay.parentElement !== document.body) {
-			document.body.appendChild(overlay);
+		function $(id) {
+			return document.getElementById(id);
 		}
-
-		var iconGuest = document.getElementById("auth-icon-guest");
-		var iconUser = document.getElementById("auth-icon-user");
-		var formsBox = document.getElementById("auth-forms");
-		var userBox = document.getElementById("auth-user");
-		var tabs = overlay.querySelectorAll(".auth-tab");
-		var loginForm = document.getElementById("auth-login-form");
-		var regForm = document.getElementById("auth-register-form");
-		var loginMsg = document.getElementById("auth-login-msg");
-		var regMsg = document.getElementById("auth-reg-msg");
-		var userEmailEl = document.getElementById("auth-user-email");
-		var userBadgeEl = document.getElementById("auth-user-badge");
-		var userBookshelfEl = document.getElementById("auth-user-bookshelf");
-
+		function clearMeCache() {
+			try {
+				sessionStorage.removeItem(ME_CACHE);
+			} catch (e) {}
+		}
+		function setLoading(btn, on) {
+			if (!btn) return;
+			btn.disabled = on;
+			btn.style.opacity = on ? "0.5" : "";
+		}
+		function openModal() {
+			var overlay = $("auth-overlay");
+			var btn = $("auth-switch");
+			if (!overlay) return;
+			// 确保弹窗挂在 body 根节点（防层叠上下文问题）
+			if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+			overlay.classList.remove("hidden");
+			if (btn) btn.setAttribute("aria-expanded", "true");
+		}
+		function closeModal() {
+			var overlay = $("auth-overlay");
+			var btn = $("auth-switch");
+			if (!overlay) return;
+			overlay.classList.add("hidden");
+			if (btn) btn.setAttribute("aria-expanded", "false");
+		}
 		function switchTab(name) {
-			tabs.forEach(function (t) {
+			var overlay = $("auth-overlay");
+			if (!overlay) return;
+			overlay.querySelectorAll(".auth-tab").forEach(function (t) {
 				var active = t.getAttribute("data-tab") === name;
 				t.classList.toggle("bg-(--primary)", active);
 				t.classList.toggle("text-white", active);
 				t.classList.toggle("dark:text-black/70", active);
 				t.classList.toggle("opacity-60", !active);
 			});
-			loginForm.classList.toggle("hidden", name !== "login");
-			regForm.classList.toggle("hidden", name !== "register");
-			loginMsg.textContent = "";
-			regMsg.textContent = "";
+			var lf = $("auth-login-form");
+			var rf = $("auth-register-form");
+			if (lf) lf.classList.toggle("hidden", name !== "login");
+			if (rf) rf.classList.toggle("hidden", name !== "register");
+			var lm = $("auth-login-msg");
+			var rm = $("auth-reg-msg");
+			if (lm) lm.textContent = "";
+			if (rm) rm.textContent = "";
 		}
-		tabs.forEach(function (t) {
-			t.addEventListener("click", function () {
-				switchTab(t.getAttribute("data-tab"));
-			});
-		});
-
-		function openModal() {
-			overlay.classList.remove("hidden");
-			btn.setAttribute("aria-expanded", "true");
-		}
-		function closeModal() {
-			overlay.classList.add("hidden");
-			btn.setAttribute("aria-expanded", "false");
-		}
-		btn.addEventListener("click", openModal);
-		document.getElementById("auth-close").addEventListener("click", closeModal);
-		overlay.addEventListener("click", function (e) {
-			if (!card.contains(e.target)) closeModal();
-		});
-		document.addEventListener("keydown", function (e) {
-			if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeModal();
-		});
-		// 其他地方（如私人书架门禁）可拉起弹窗
-		document.addEventListener("open-auth-modal", function (e) {
-			if (e.detail && e.detail.tab === "register") switchTab("register");
-			openModal();
-		});
-
 		function showLoggedIn(user) {
-			formsBox.classList.add("hidden");
-			userBox.classList.remove("hidden");
-			userBox.classList.add("flex");
-			userEmailEl.textContent = user.email;
-			userBadgeEl.textContent = user.isAdmin ? "管理员" : "普通用户";
-			userBookshelfEl.classList.toggle("hidden", !user.isAdmin);
-			if (iconGuest && iconUser) {
-				iconGuest.classList.add("hidden");
-				iconUser.classList.remove("hidden");
+			var formsBox = $("auth-forms");
+			var userBox = $("auth-user");
+			if (formsBox) formsBox.classList.add("hidden");
+			if (userBox) {
+				userBox.classList.remove("hidden");
+				userBox.classList.add("flex");
+				var e = $("auth-user-email");
+				var b = $("auth-user-badge");
+				var bk = $("auth-user-bookshelf");
+				if (e) e.textContent = user.email;
+				if (b) b.textContent = user.isAdmin ? "管理员" : "普通用户";
+				if (bk) bk.classList.toggle("hidden", !user.isAdmin);
+			}
+			var g = $("auth-icon-guest");
+			var u = $("auth-icon-user");
+			if (g && u) {
+				g.classList.add("hidden");
+				u.classList.remove("hidden");
 			}
 		}
 
-		function setLoading(formBtn, on) {
-			formBtn.disabled = on;
-			formBtn.style.opacity = on ? "0.5" : "";
-		}
-
-		function clearMeCache() {
-			try {
-				sessionStorage.removeItem("ff_me_cache");
-			} catch (e) {}
-		}
-
-		function handleAuth(endpoint, body, msgEl, btnEl) {
+		function handleAuth(kind, body, msgEl, btnEl) {
 			setLoading(btnEl, true);
-			msgEl.textContent = "";
+			if (msgEl) msgEl.textContent = "";
 			clearMeCache();
-			fetch(endpoint, {
+			fetch(kind === "login" ? "/api/auth/login" : "/api/auth/register", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(body),
 			})
 				.then(function (r) {
-					return r.json().then(function (d) {
-						return { ok: r.ok, d: d };
-					});
+					return r
+						.json()
+						.catch(function () {
+							throw new Error("BAD_RESPONSE_" + r.status);
+						})
+						.then(function (d) {
+							return { ok: r.ok, status: r.status, d: d };
+						});
 				})
 				.then(function (res) {
-					if (res.ok) {
-						// 成功后刷新页面，让书架门禁/自动解锁等全部生效
+					if (res.ok && res.d && res.d.user) {
+						// 先写入缓存再刷新，刷新后立刻显示已登录态
+						try {
+							sessionStorage.setItem(ME_CACHE, JSON.stringify({ user: res.d.user, exp: Date.now() + 600000 }));
+						} catch (e) {}
+						if (msgEl && msgEl.id === "auth-login-msg") {
+							msgEl.textContent = "登录成功，正在进入…";
+						}
 						location.reload();
-					} else {
-						msgEl.textContent = (res.d && res.d.error) || "操作失败";
-						setLoading(btnEl, false);
+						return;
 					}
+					var code = res.d && res.d.code;
+					var text = (res.d && res.d.error) || "操作失败，请重试";
+					if (kind === "login" && code === "NO_ACCOUNT") {
+						// 账号不存在 → 自动切到注册页签并带入邮箱
+						if (msgEl) msgEl.textContent = text;
+						var regEmail = $("auth-reg-email");
+						if (regEmail) regEmail.value = body.email || "";
+						switchTab("register");
+						var rp = $("auth-reg-password");
+						if (rp) rp.focus();
+						return;
+					}
+					if (kind === "register" && code === "ALREADY_EXISTS") {
+						// 已注册 → 自动切回登录页签并带入邮箱
+						if (msgEl) msgEl.textContent = text;
+						var loginEmail = $("auth-login-email");
+						if (loginEmail) loginEmail.value = body.email || "";
+						switchTab("login");
+						var lp = $("auth-login-password");
+						if (lp) lp.focus();
+						return;
+					}
+					if (msgEl) msgEl.textContent = text;
+					setLoading(btnEl, false);
 				})
-				.catch(function () {
-					msgEl.textContent = "网络错误，请重试";
+				.catch(function (err) {
+					if (msgEl) {
+						msgEl.textContent =
+							err && String(err.message || "").indexOf("BAD_RESPONSE_") === 0
+								? "服务器响应异常，请稍后重试"
+								: "网络错误，请检查网络后重试";
+					}
+					console.warn("[auth]", err);
 					setLoading(btnEl, false);
 				});
 		}
 
-		loginForm.addEventListener("submit", function (e) {
-			e.preventDefault();
-			handleAuth(
-				"/api/auth/login",
-				{
-					email: document.getElementById("auth-login-email").value.trim(),
-					password: document.getElementById("auth-login-password").value,
-				},
-				loginMsg,
-				document.getElementById("auth-login-btn"),
-			);
-		});
-
-		regForm.addEventListener("submit", function (e) {
-			e.preventDefault();
-			var pwd = document.getElementById("auth-reg-password").value;
-			var pwd2 = document.getElementById("auth-reg-password2").value;
-			if (pwd !== pwd2) {
-				regMsg.textContent = "两次输入的密码不一致";
+		// ---- 事件委托：所有交互在 document 上拦截，元素随时重新查询 ----
+		document.addEventListener("click", function (e) {
+			var t = e.target;
+			if (!t || !t.closest) return;
+			if (t.closest("#auth-switch")) {
+				var overlay = $("auth-overlay");
+				if (overlay && !overlay.classList.contains("hidden")) closeModal();
+				else openModal();
 				return;
 			}
-			handleAuth(
-				"/api/auth/register",
-				{
-					email: document.getElementById("auth-reg-email").value.trim(),
-					password: pwd,
-				},
-				regMsg,
-				document.getElementById("auth-reg-btn"),
-			);
+			if (t.closest("#auth-close")) {
+				closeModal();
+				return;
+			}
+			var tab = t.closest(".auth-tab");
+			if (tab) {
+				switchTab(tab.getAttribute("data-tab"));
+				return;
+			}
+			if (t.closest("#auth-logout")) {
+				clearMeCache();
+				fetch("/api/auth/logout", { method: "POST" }).then(function () {
+					location.reload();
+				});
+				return;
+			}
+			// 点击遮罩空白处关闭
+			var overlay2 = $("auth-overlay");
+			var card = $("auth-card");
+			if (overlay2 && !overlay2.classList.contains("hidden") && card && !card.contains(t)) {
+				closeModal();
+			}
 		});
 
-		document.getElementById("auth-logout").addEventListener("click", function () {
-			clearMeCache();
-			fetch("/api/auth/logout", { method: "POST" }).then(function () {
-				location.reload();
-			});
+		document.addEventListener("submit", function (e) {
+			var f = e.target;
+			if (!f || !f.id) return;
+			if (f.id === "auth-login-form") {
+				e.preventDefault();
+				handleAuth(
+					"login",
+					{
+						email: ($("auth-login-email") || {}).value ? $("auth-login-email").value.trim() : "",
+						password: ($("auth-login-password") || {}).value || "",
+					},
+					$("auth-login-msg"),
+					$("auth-login-btn"),
+				);
+			}
+			if (f.id === "auth-register-form") {
+				e.preventDefault();
+				var pwd = ($("auth-reg-password") || {}).value || "";
+				var pwd2 = ($("auth-reg-password2") || {}).value || "";
+				if (pwd !== pwd2) {
+					var rm = $("auth-reg-msg");
+					if (rm) rm.textContent = "两次输入的密码不一致";
+					return;
+				}
+				handleAuth(
+					"register",
+					{
+						email: ($("auth-reg-email") || {}).value ? $("auth-reg-email").value.trim() : "",
+						password: pwd,
+					},
+					$("auth-reg-msg"),
+					$("auth-reg-btn"),
+				);
+			}
 		});
 
-		// 初始化：查会话状态，决定按钮图标
-		// 优先用 sessionStorage 缓存（10 分钟内有效），避免每次整页加载都请求 API
-		var ME_CACHE = "ff_me_cache";
+		document.addEventListener("keydown", function (e) {
+			if (e.key === "Escape") {
+				var overlay = $("auth-overlay");
+				if (overlay && !overlay.classList.contains("hidden")) closeModal();
+			}
+		});
+
+		// 其他组件（私人书架门禁、内容管理门禁）通过该事件拉起弹窗
+		document.addEventListener("open-auth-modal", function (e) {
+			if (e.detail && e.detail.tab === "register") switchTab("register");
+			openModal();
+		});
+
+		// 初始化：查会话状态，决定按钮图标（10 分钟缓存，避免每页都请求）
 		var cached = null;
 		try {
 			cached = JSON.parse(sessionStorage.getItem(ME_CACHE));
