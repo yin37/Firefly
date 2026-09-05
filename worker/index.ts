@@ -8,6 +8,9 @@ interface Env {
 	ASSETS: { fetch: (req: Request) => Promise<Response> };
 	ADMIN_EMAILS: string;
 	PRIVATE_PASSWORD: string;
+	GH_TOKEN?: string;
+	GITHUB_REPO?: string;
+	GITHUB_BRANCH?: string;
 }
 
 const COOKIE = "ff_session";
@@ -226,6 +229,68 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 			return json({ error: "无权限" }, 403);
 		}
 		return json({ password: env.PRIVATE_PASSWORD || "" });
+	}
+
+	// ---- 删除文章（仅管理员）：通过 GitHub API 删除源文件，触发自动重建 ----
+	if (path === "/api/admin/delete-article" && method === "POST") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员可以删除文章" }, 403);
+
+		let body: any;
+		try {
+			body = await request.json();
+		} catch {
+			return json({ error: "请求格式错误" }, 400);
+		}
+		const slug = String(body.slug || "").trim();
+		if (!slug || slug.includes("..") || slug.startsWith("/")) return json({ error: "参数错误" }, 400);
+
+		const token = env.GH_TOKEN;
+		if (!token) return json({ error: "服务器未配置 GitHub 令牌，暂时无法删除" }, 500);
+		const repo = env.GITHUB_REPO || "yin37/Firefly";
+		const branch = env.GITHUB_BRANCH || "master";
+		const ghHeaders: Record<string, string> = {
+			Authorization: `Bearer ${token}`,
+			Accept: "application/vnd.github+json",
+			"User-Agent": "firefly-blog",
+			"Content-Type": "application/json",
+		};
+		const encPath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+
+		// 按常见命名规则找到源文件
+		const candidates = [
+			`src/content/posts/${slug}.md`,
+			`src/content/posts/${slug}.mdx`,
+			`src/content/posts/${slug}/index.md`,
+			`src/content/posts/${slug}/index.mdx`,
+		];
+		let found: any = null;
+		for (const p of candidates) {
+			const r = await fetch(
+				`https://api.github.com/repos/${repo}/contents/${encPath(p)}?ref=${encodeURIComponent(branch)}`,
+				{ headers: ghHeaders },
+			);
+			if (r.ok) {
+				found = await r.json();
+				break;
+			}
+			if (r.status === 401 || r.status === 403) {
+				return json({ error: "GitHub 令牌无效或权限不足" }, 500);
+			}
+		}
+		if (!found) return json({ error: "未找到对应的文章文件" }, 404);
+		if (Array.isArray(found)) return json({ error: "文章路径异常" }, 400);
+
+		const del = await fetch(`https://api.github.com/repos/${repo}/contents/${encPath(found.path)}`, {
+			method: "DELETE",
+			headers: ghHeaders,
+			body: JSON.stringify({ message: `删除文章：${slug}`, sha: found.sha, branch }),
+		});
+		if (!del.ok) {
+			const detail = await del.text().catch(() => "");
+			return json({ error: `删除失败（GitHub ${del.status}）`, detail: detail.slice(0, 200) }, 502);
+		}
+		return json({ ok: true });
 	}
 
 	return json({ error: "Not Found" }, 404);

@@ -23,6 +23,8 @@
 	],
 	"vars": {
 		"ADMIN_EMAILS": "2896068923@qq.com",
-		"PRIVATE_PASSWORD": "021926"
+		"PRIVATE_PASSWORD": "021926",
+		"GITHUB_REPO": "yin37/Firefly",
+		"GITHUB_BRANCH": "master"
 	}
 }
