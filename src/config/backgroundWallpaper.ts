@@ -116,6 +116,12 @@ export const backgroundWallpaper: BackgroundWallpaperConfig = {
 					url: "mailto:2896068923@qq.com",
 				},
 				{
+					// Sponsor 心形图标：点击打开给站长的邮件（打赏页已下线，用邮件联系）
+					name: "Sponsor",
+					icon: "material-symbols:favorite",
+					url: "mailto:2896068923@qq.com",
+				},
+				{
 					name: "RSS",
 					icon: "fa7-solid:rss",
 					url: "/rss/",
