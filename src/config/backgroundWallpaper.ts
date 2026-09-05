@@ -107,19 +107,11 @@ export const backgroundWallpaper: BackgroundWallpaperConfig = {
 				{
 					name: "GitHub",
 					icon: "fa7-brands:github",
-					url: "https://github.com/CuteLeaf/Firefly",
+					url: "https://github.com/yin37/Firefly",
 					showName: true,
 				},
-				{
-					name: "Email",
-					icon: "fa7-solid:envelope",
-					url: "mailto:xiaye@msn.com",
-				},
-				{
-					name: "Sponsor",
-					icon: "material-symbols:favorite",
-					url: "https://blog.cuteleaf.cn/sponsor/",
-				},
+				// Email 与 Sponsor 图标已按站长要求移除（原为主题作者的联系方式和打赏页）
+				// 如需添加自己的邮箱，仿照下面 RSS 的格式加回即可
 				{
 					name: "RSS",
 					icon: "fa7-solid:rss",
