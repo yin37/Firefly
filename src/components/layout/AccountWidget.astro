@@ -1,0 +1,305 @@
+---
+// 站内账号组件：导航栏账号按钮 + 登录/注册弹窗（不跳转页面）
+// - 未登录：点按钮弹出 登录/注册 双 Tab 弹窗
+// - 已登录：弹窗显示身份信息 + 退出登录
+// - 监听全局事件 open-auth-modal，供「私人书架门禁」等处直接拉起弹窗
+import { Icon } from "astro-icon/components";
+import { url } from "@/utils/url-utils";
+---
+
+<button
+	aria-label="账号"
+	aria-controls="auth-overlay"
+	aria-expanded="false"
+	class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90 relative"
+	id="auth-switch"
+>
+	<span id="auth-icon-guest"><Icon name="material-symbols:person-outline-rounded" class="text-[1.25rem]" /></span>
+	<span id="auth-icon-user" class="hidden relative">
+		<Icon name="material-symbols:person-rounded" class="text-[1.25rem]" />
+		<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-(--primary)"></span>
+	</span>
+</button>
+
+<!-- 登录/注册弹窗 -->
+<div
+	id="auth-overlay"
+	class="hidden fixed inset-0 flex items-center justify-center p-4"
+	style="background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); z-index: 9999;"
+>
+	<div id="auth-card" class="card-base rounded-2xl w-full max-w-90 p-6 relative">
+		<button
+			id="auth-close"
+			aria-label="关闭"
+			class="btn-plain absolute top-3 right-3 rounded-lg h-8 w-8 active:scale-90"
+		>
+			<Icon name="material-symbols:close-rounded" class="text-[1.1rem]" />
+		</button>
+
+		<!-- 未登录：Tab + 两个表单 -->
+		<div id="auth-forms">
+			<h2 id="auth-title" class="text-lg font-bold text-black/80 dark:text-white/80 mb-4 text-center">
+				登录 / 注册
+			</h2>
+			<div id="auth-tabs" class="flex gap-2 mb-4">
+				<button type="button" data-tab="login" class="auth-tab flex-1 py-1.5 rounded-lg text-sm font-medium transition-all bg-(--primary) text-white dark:text-black/70">
+					登录
+				</button>
+				<button type="button" data-tab="register" class="auth-tab flex-1 py-1.5 rounded-lg text-sm font-medium transition-all opacity-60 hover:opacity-90">
+					注册
+				</button>
+			</div>
+
+			<form id="auth-login-form" class="space-y-2">
+				<input
+					id="auth-login-email" type="email" placeholder="邮箱" autocomplete="email"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10
+					       border border-black/8 dark:border-white/8
+					       text-black/80 dark:text-white/80 placeholder-black/25 dark:placeholder-white/25
+					       outline-hidden focus:border-(--primary) transition"
+				/>
+				<input
+					id="auth-login-password" type="password" placeholder="密码" autocomplete="current-password"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10
+					       border border-black/8 dark:border-white/8
+					       text-black/80 dark:text-white/80 placeholder-black/25 dark:placeholder-white/25
+					       outline-hidden focus:border-(--primary) transition"
+				/>
+				<p id="auth-login-msg" class="text-xs text-red-500 dark:text-red-400 min-h-4 m-0"></p>
+				<button type="submit" id="auth-login-btn"
+					class="w-full py-2 rounded-lg text-sm font-medium bg-(--primary) text-white dark:text-black/70 hover:opacity-85 active:scale-[0.98] transition-all">
+					登 录
+				</button>
+			</form>
+
+			<form id="auth-register-form" class="space-y-2 hidden">
+				<input
+					id="auth-reg-email" type="email" placeholder="邮箱" autocomplete="email"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10
+					       border border-black/8 dark:border-white/8
+					       text-black/80 dark:text-white/80 placeholder-black/25 dark:placeholder-white/25
+					       outline-hidden focus:border-(--primary) transition"
+				/>
+				<input
+					id="auth-reg-password" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10
+					       border border-black/8 dark:border-white/8
+					       text-black/80 dark:text-white/80 placeholder-black/25 dark:placeholder-white/25
+					       outline-hidden focus:border-(--primary) transition"
+				/>
+				<input
+					id="auth-reg-password2" type="password" placeholder="确认密码" autocomplete="new-password"
+					class="w-full px-3 py-2 rounded-lg text-sm bg-black/5 dark:bg-white/10
+					       border border-black/8 dark:border-white/8
+					       text-black/80 dark:text-white/80 placeholder-black/25 dark:placeholder-white/25
+					       outline-hidden focus:border-(--primary) transition"
+				/>
+				<p id="auth-reg-msg" class="text-xs text-red-500 dark:text-red-400 min-h-4 m-0"></p>
+				<button type="submit" id="auth-reg-btn"
+					class="w-full py-2 rounded-lg text-sm font-medium bg-(--primary) text-white dark:text-black/70 hover:opacity-85 active:scale-[0.98] transition-all">
+					注 册
+				</button>
+			</form>
+		</div>
+
+		<!-- 已登录：身份卡片 -->
+		<div id="auth-user" class="hidden flex flex-col items-center gap-2 text-center py-2">
+			<Icon name="material-symbols:account-circle-rounded" class="text-6xl text-(--primary)" />
+			<p id="auth-user-email" class="font-bold text-black/80 dark:text-white/80 m-0 break-all"></p>
+			<span id="auth-user-badge" class="rounded-full px-3 py-0.5 text-xs bg-(--btn-regular-bg) opacity-80"></span>
+			<a
+				id="auth-user-bookshelf"
+				href={url("/private/")}
+				class="hidden mt-1 text-sm text-(--primary) hover:opacity-80 transition"
+			>
+				📖 打开私人书架
+			</a>
+			<button type="button" id="auth-logout"
+				class="mt-2 w-full py-2 rounded-lg text-sm font-medium bg-black/5 dark:bg-white/10 text-black/70 dark:text-white/70 hover:opacity-85 active:scale-[0.98] transition-all">
+				退出登录
+			</button>
+		</div>
+	</div>
+</div>
+
+<style>
+	#auth-overlay:not(.hidden) {
+		animation: auth-fade-in 0.18s ease-out;
+	}
+	@keyframes auth-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+	#auth-card {
+		animation: auth-pop-in 0.18s ease-out;
+	}
+	@keyframes auth-pop-in {
+		from { transform: scale(0.96) translateY(8px); opacity: 0; }
+		to { transform: scale(1) translateY(0); opacity: 1; }
+	}
+</style>
+
+<script>
+	(function () {
+		if (window.__authWidgetInit) return;
+		window.__authWidgetInit = true;
+
+		var overlay = document.getElementById("auth-overlay");
+		var card = document.getElementById("auth-card");
+		var btn = document.getElementById("auth-switch");
+		if (!overlay || !btn) return;
+
+		// 把弹窗移到 body 根节点，避免导航栏层叠上下文/变换影响 fixed 定位
+		if (overlay.parentElement !== document.body) {
+			document.body.appendChild(overlay);
+		}
+
+		var iconGuest = document.getElementById("auth-icon-guest");
+		var iconUser = document.getElementById("auth-icon-user");
+		var formsBox = document.getElementById("auth-forms");
+		var userBox = document.getElementById("auth-user");
+		var tabs = overlay.querySelectorAll(".auth-tab");
+		var loginForm = document.getElementById("auth-login-form");
+		var regForm = document.getElementById("auth-register-form");
+		var loginMsg = document.getElementById("auth-login-msg");
+		var regMsg = document.getElementById("auth-reg-msg");
+		var userEmailEl = document.getElementById("auth-user-email");
+		var userBadgeEl = document.getElementById("auth-user-badge");
+		var userBookshelfEl = document.getElementById("auth-user-bookshelf");
+
+		function switchTab(name) {
+			tabs.forEach(function (t) {
+				var active = t.getAttribute("data-tab") === name;
+				t.classList.toggle("bg-(--primary)", active);
+				t.classList.toggle("text-white", active);
+				t.classList.toggle("dark:text-black/70", active);
+				t.classList.toggle("opacity-60", !active);
+			});
+			loginForm.classList.toggle("hidden", name !== "login");
+			regForm.classList.toggle("hidden", name !== "register");
+			loginMsg.textContent = "";
+			regMsg.textContent = "";
+		}
+		tabs.forEach(function (t) {
+			t.addEventListener("click", function () {
+				switchTab(t.getAttribute("data-tab"));
+			});
+		});
+
+		function openModal() {
+			overlay.classList.remove("hidden");
+			btn.setAttribute("aria-expanded", "true");
+		}
+		function closeModal() {
+			overlay.classList.add("hidden");
+			btn.setAttribute("aria-expanded", "false");
+		}
+		btn.addEventListener("click", openModal);
+		document.getElementById("auth-close").addEventListener("click", closeModal);
+		overlay.addEventListener("click", function (e) {
+			if (!card.contains(e.target)) closeModal();
+		});
+		document.addEventListener("keydown", function (e) {
+			if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeModal();
+		});
+		// 其他地方（如私人书架门禁）可拉起弹窗
+		document.addEventListener("open-auth-modal", function (e) {
+			if (e.detail && e.detail.tab === "register") switchTab("register");
+			openModal();
+		});
+
+		function showLoggedIn(user) {
+			formsBox.classList.add("hidden");
+			userBox.classList.remove("hidden");
+			userBox.classList.add("flex");
+			userEmailEl.textContent = user.email;
+			userBadgeEl.textContent = user.isAdmin ? "管理员" : "普通用户";
+			userBookshelfEl.classList.toggle("hidden", !user.isAdmin);
+			if (iconGuest && iconUser) {
+				iconGuest.classList.add("hidden");
+				iconUser.classList.remove("hidden");
+			}
+		}
+
+		function setLoading(formBtn, on) {
+			formBtn.disabled = on;
+			formBtn.style.opacity = on ? "0.5" : "";
+		}
+
+		function handleAuth(endpoint, body, msgEl, btnEl) {
+			setLoading(btnEl, true);
+			msgEl.textContent = "";
+			fetch(endpoint, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			})
+				.then(function (r) {
+					return r.json().then(function (d) {
+						return { ok: r.ok, d: d };
+					});
+				})
+				.then(function (res) {
+					if (res.ok) {
+						// 成功后刷新页面，让书架门禁/自动解锁等全部生效
+						location.reload();
+					} else {
+						msgEl.textContent = (res.d && res.d.error) || "操作失败";
+						setLoading(btnEl, false);
+					}
+				})
+				.catch(function () {
+					msgEl.textContent = "网络错误，请重试";
+					setLoading(btnEl, false);
+				});
+		}
+
+		loginForm.addEventListener("submit", function (e) {
+			e.preventDefault();
+			handleAuth(
+				"/api/auth/login",
+				{
+					email: document.getElementById("auth-login-email").value.trim(),
+					password: document.getElementById("auth-login-password").value,
+				},
+				loginMsg,
+				document.getElementById("auth-login-btn"),
+			);
+		});
+
+		regForm.addEventListener("submit", function (e) {
+			e.preventDefault();
+			var pwd = document.getElementById("auth-reg-password").value;
+			var pwd2 = document.getElementById("auth-reg-password2").value;
+			if (pwd !== pwd2) {
+				regMsg.textContent = "两次输入的密码不一致";
+				return;
+			}
+			handleAuth(
+				"/api/auth/register",
+				{
+					email: document.getElementById("auth-reg-email").value.trim(),
+					password: pwd,
+				},
+				regMsg,
+				document.getElementById("auth-reg-btn"),
+			);
+		});
+
+		document.getElementById("auth-logout").addEventListener("click", function () {
+			fetch("/api/auth/logout", { method: "POST" }).then(function () {
+				location.reload();
+			});
+		});
+
+		// 初始化：查会话状态，决定按钮图标
+		fetch("/api/auth/me")
+			.then(function (r) {
+				return r.json();
+			})
+			.then(function (d) {
+				if (d && d.user) showLoggedIn(d.user);
+			})
+			.catch(function () {});
+	})();
+</script>

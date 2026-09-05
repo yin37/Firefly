@@ -1,5 +1,5 @@
 <a href="/admin/" target="_blank" rel="noopener" style="opacity:0.4;transition:opacity .2s ease" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">✏️ 管理</a>
 <span style="opacity:0.25;margin:0 2px">·</span>
-<a href="/login/" style="opacity:0.4;transition:opacity .2s ease" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">🔑 登录</a>
+<a href="/login/" onclick="if(document.getElementById('auth-overlay')){event.preventDefault();document.dispatchEvent(new CustomEvent('open-auth-modal'))}" style="opacity:0.4;transition:opacity .2s ease" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">🔑 登录</a>
 <span style="opacity:0.25;margin:0 2px">·</span>
-<a href="/register/" style="opacity:0.4;transition:opacity .2s ease" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">📝 注册</a>
+<a href="/register/" onclick="if(document.getElementById('auth-overlay')){event.preventDefault();document.dispatchEvent(new CustomEvent('open-auth-modal',{detail:{tab:'register'}}))}" style="opacity:0.4;transition:opacity .2s ease" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">📝 注册</a>

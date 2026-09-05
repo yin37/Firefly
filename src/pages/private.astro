@@ -40,6 +40,7 @@ function formatDate(d: Date): string {
 			<p class="opacity-60 text-sm mb-5">私人书架仅站长账号可见，请先登录。</p>
 			<a
 				href="/login/?redirect=%2Fprivate%2F"
+				id="private-gate-login"
 				class="inline-block rounded-lg bg-(--primary) text-white dark:text-black/70 px-5 py-2 text-sm font-medium hover:opacity-85 transition"
 			>
 				登录
@@ -99,6 +100,16 @@ function formatDate(d: Date): string {
 
 	<script is:inline>
 		(function() {
+			// 门禁「登录」按钮：优先拉起站内弹窗，弹窗不存在时回退跳转 /login/
+			var gateBtn = document.getElementById('private-gate-login');
+			if (gateBtn) {
+				gateBtn.addEventListener('click', function(e) {
+					if (document.getElementById('auth-overlay')) {
+						e.preventDefault();
+						document.dispatchEvent(new CustomEvent('open-auth-modal'));
+					}
+				});
+			}
 			fetch('/api/auth/me').then(function(r) { return r.json(); }).then(function(d) {
 				var isAdmin = d && d.user && d.user.isAdmin;
 				if (isAdmin) {
