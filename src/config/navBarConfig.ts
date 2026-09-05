@@ -84,8 +84,8 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 		url: "#",
 		icon: "material-symbols:info",
 		children: [
-			// 打赏
-			LinkPresets.Sponsor,
+			// 打赏入口已按站长要求移除（siteConfig.pages.sponsor = false）
+			// LinkPresets.Sponsor,
 
 			// 关于页面
 			LinkPresets.About,

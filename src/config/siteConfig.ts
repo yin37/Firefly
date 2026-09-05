@@ -34,8 +34,8 @@ const pages = resolvePageToggles({
 
 	// ── 关于 (About) ──────────────────────────────────
 
-	// 打赏页面开关
-	sponsor: true,
+	// 打赏页面开关（已按要求关闭：导航菜单、文章底部按钮、/sponsor/ 页面全部隐藏）
+	sponsor: false,
 });
 
 export const siteConfig: SiteConfig = {
