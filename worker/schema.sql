@@ -11,5 +11,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 	expires_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS auth_attempts (
+	key TEXT NOT NULL,
+	ts INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_key ON auth_attempts(key, ts);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_ts ON auth_attempts(ts);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);

@@ -104,6 +104,30 @@ function clearCookie(): string {
 	return `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
+// ---- 防暴力破解：同一 IP(+邮箱) 在时间窗内超过次数则拒绝 ----
+// 记录在 D1 auth_attempts 表；限速系统自身故障时放行（不拦正常用户）
+async function tooManyAttempts(env: Env, key: string, max: number, windowSec: number): Promise<boolean> {
+	const now = Date.now();
+	try {
+		const row: any = await env.DB.prepare(`SELECT COUNT(*) AS c FROM auth_attempts WHERE key = ?1 AND ts > ?2`)
+			.bind(key, now - windowSec * 1000)
+			.first();
+		if ((row?.c || 0) >= max) return true;
+		await env.DB.prepare(`INSERT INTO auth_attempts (key, ts) VALUES (?1, ?2)`).bind(key, now).run();
+		// 顺带清理一天前的旧记录（5% 概率触发，避免每次都多一次写）
+		if (Math.random() < 0.05) {
+			await env.DB.prepare(`DELETE FROM auth_attempts WHERE ts < ?1`).bind(now - 86400000).run();
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+function clientIp(request: Request): string {
+	return request.headers.get("CF-Connecting-IP") || "unknown";
+}
+
 function isAdminEmail(env: Env, email: string): boolean {
 	return (env.ADMIN_EMAILS || "")
 		.split(",")
@@ -244,6 +268,10 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 
 	// ---- 注册 ----
 	if (path === "/api/auth/register" && method === "POST") {
+		// 防滥用：同 IP 每小时最多 5 次注册尝试
+		if (await tooManyAttempts(env, `reg:${clientIp(request)}`, 5, 3600)) {
+			return json({ error: "注册尝试过于频繁，请 1 小时后再试" }, 429);
+		}
 		let body: any;
 		try {
 			body = await request.json();
@@ -287,6 +315,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		}
 		const email = String(body.email || "").trim().toLowerCase();
 		const password = String(body.password || "");
+		// 防暴力破解：同 IP 15 分钟最多 10 次；同一 IP+邮箱 15 分钟最多 5 次
+		if (await tooManyAttempts(env, `login:${clientIp(request)}`, 10, 900)) {
+			return json({ error: "尝试次数过多，请 15 分钟后再试" }, 429);
+		}
+		if (await tooManyAttempts(env, `login:${clientIp(request)}:${email}`, 5, 900)) {
+			return json({ error: "该账号尝试次数过多，请 15 分钟后再试" }, 429);
+		}
 		const row: any = await env.DB.prepare(`SELECT id, password_hash FROM users WHERE email = ?1`)
 			.bind(email)
 			.first();

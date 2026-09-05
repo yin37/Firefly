@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /manage/
+Disallow: /private/
+Disallow: /api/
+
+Sitemap: https://blog.xiaoyin.ccwu.cc/sitemap-index.xml
