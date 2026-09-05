@@ -46,15 +46,15 @@ const homeTextLinksEnable = homeText?.linksEnable !== false;
                             const encodedEmail = isMailto
                                 ? encodeMailto(link.url)
                                 : undefined;
-                            const isExternal = link.url.startsWith("http");
+                            // 横幅图标一律新标签页打开（站内页如 RSS 也在新页打开，避免 Swup 静默切换让访客误以为点击无效）
                             return (
                                 <a
                                     href={isMailto ? "#" : link.url}
                                     aria-label={link.name}
                                     title={link.name}
                                     data-encoded-email={encodedEmail}
-                                    target={!isMailto && isExternal ? "_blank" : undefined}
-                                    rel={!isMailto && isExternal ? "noopener" : undefined}
+                                    target={!isMailto ? "_blank" : undefined}
+                                    rel={!isMailto ? "noopener" : undefined}
                                     class={link.showName ? "banner-link banner-link-text" : "banner-link"}
                                     style="color: #fff"
                                     onclick={isMailto ? MAILTO_ONCLICK_SCRIPT : undefined}
