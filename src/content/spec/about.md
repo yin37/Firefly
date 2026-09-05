@@ -1,26 +1,27 @@
-# 关于我
+# 关于我 / About Me
 
-你好，我是 **yin37** ，一名《阴阳师》玩家，这里是我的个人博客。
+你好！我是 **夏叶** ，一个在数字世界中默默无闻的一片叶子。
 
-## 🎮 关于本站
+## 🛠️ 关于本站
 
-这个博客主要用来记录和分享：
+这个网站使用 **Astro** 框架构建，采用了 [Firefly](https://github.com/CuteLeaf/Firefly) 模板，Firefly 是基于 [Fuwari](https://github.com/saicaca/fuwari) 的二次开发。
 
-- 《阴阳师》的游戏攻略与心得
-- 平时的随笔和收藏
+**Firefly** 是一款基于 Astro 框架和 Fuwari 模板开发的清新美观且现代化个人博客主题模板，专为技术爱好者和内容创作者设计。该主题融合了现代 Web 技术栈，提供了丰富的功能模块和高度可定制的界面，让您能够轻松打造出专业且美观的个人博客网站。
 
-文章不定期更新，如果内容对你有帮助，欢迎常来看看。
 
-## 📮 联系我
+**🖥️在线预览： [Firefly - Demo site](https://firefly.cuteleaf.cn/)**
 
-- GitHub：[yin37](https://github.com/yin37)
-- 评论区：欢迎在文章下方留言交流
+**📝Firefly使用文档： [https://docs-firefly.cuteleaf.cn](https://docs-firefly.cuteleaf.cn/)**
 
-> [!TIP] 交流提示
-> 评论使用 GitHub 账号登录即可发表，看到后会尽快回复。
+**⭐Firefly开源地址：[https://github.com/CuteLeaf/Firefly](https://github.com/CuteLeaf/Firefly)** 
 
-::github{repo="yin37/Firefly"}
+**⭐Fuwari开源地址：[https://github.com/saicaca/fuwari](https://github.com/saicaca/fuwari)**
+
+::github{repo="CuteLeaf/Firefly"}
+
+::github{repo="saicaca/fuwari"}
 
 ---
 
-*感谢你的来访，希望这里的内容对你有帮助！*
+*感谢你的来访！希望在这里能找到对你有用的内容！*
+

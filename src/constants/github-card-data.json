@@ -10,11 +10,5 @@
 		"language": "Astro",
 		"avatarUrl": "https://avatars.githubusercontent.com/u/25200299?v=4",
 		"license": "MIT"
-	},
-	"yin37/firefly": {
-		"description": "🍀Firefly, fresh and aesthetic Astro blog theme template. ",
-		"language": "Astro",
-		"avatarUrl": "https://avatars.githubusercontent.com/u/241095848?v=4",
-		"license": "MIT"
 	}
 }
