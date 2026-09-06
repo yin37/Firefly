@@ -75,6 +75,13 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 
 			// 相册
 			LinkPresets.Gallery,
+
+			// 管理页（数据仪表盘 + 本地管理后台入口，仅站长登录后可见内容）
+			{
+				name: "管理",
+				url: "/manage/",
+				icon: "material-symbols:manage-accounts",
+			},
 		],
 	});
 
