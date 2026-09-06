@@ -33,6 +33,36 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 			正在读取文章列表…
 		</div>
 
+		<!-- 数据仪表盘（管理员可见） -->
+		<div id="manage-dash" class="hidden mb-6 flex flex-col gap-3">
+			<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+				<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4">
+					<div class="text-xs opacity-50 mb-1">👁 总阅读量</div>
+					<div id="dash-total" class="text-2xl font-bold text-[var(--primary)]">--</div>
+				</div>
+				<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4">
+					<div class="text-xs opacity-50 mb-1">📅 今日阅读</div>
+					<div id="dash-today" class="text-2xl font-bold text-[var(--primary)]">--</div>
+					<div id="dash-today-day" class="text-[11px] opacity-40 mt-0.5"></div>
+				</div>
+				<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4">
+					<div class="text-xs opacity-50 mb-1">📝 文章总数</div>
+					<div id="dash-posts" class="text-2xl font-bold text-[var(--primary)]">--</div>
+					<div id="dash-posts-sub" class="text-[11px] opacity-40 mt-0.5"></div>
+				</div>
+				<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4 flex flex-col">
+					<div class="text-xs opacity-50 mb-1">💾 数据库备份</div>
+					<div class="text-[11px] opacity-40 leading-snug mb-2">每天 05:00 自动备份 · 保留 30 天</div>
+					<button id="dash-backup-btn" class="mt-auto rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-3 py-1.5 text-xs font-medium transition cursor-pointer w-fit">立即备份</button>
+					<p id="dash-backup-msg" class="hidden text-[11px] mt-1 leading-snug"></p>
+				</div>
+			</div>
+			<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4">
+				<div class="text-sm font-bold mb-2">🔥 热度 Top 10</div>
+				<ol id="dash-top" class="flex flex-col gap-1.5 text-sm"></ol>
+			</div>
+		</div>
+
 		<!-- 工具栏：筛选 + 搜索（管理员可见） -->
 		<div id="manage-toolbar" class="hidden flex flex-wrap items-center gap-2 mb-4">
 			<div id="manage-tabs" class="flex gap-1.5 flex-wrap">
@@ -201,6 +231,74 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 				});
 			}
 
+			// ---- 数据仪表盘 ----
+			var titleMap = {}; // slug -> 标题
+			function renderDash(stats) {
+				document.getElementById("dash-total").textContent = Number(stats.totalViews || 0).toLocaleString();
+				document.getElementById("dash-today").textContent = Number(stats.todayViews || 0).toLocaleString();
+				document.getElementById("dash-today-day").textContent = stats.today || "";
+				document.getElementById("dash-posts").textContent = allPosts.length;
+				var pub = allPosts.filter(function (p) { return statusOf(p) === "published"; }).length;
+				document.getElementById("dash-posts-sub").textContent = "已发布 " + pub + " 篇";
+				var top = (stats.top || []).filter(function (t) { return !titleMap[t.slug] || !isDeletedSlug(t.slug); });
+				var max = top.length ? top[0].count : 0;
+				document.getElementById("dash-top").innerHTML = top.length
+					? top
+							.map(function (t, i) {
+								var title = titleMap[t.slug] || t.slug;
+								var w = max > 0 ? Math.max(4, Math.round((t.count / max) * 100)) : 0;
+								return (
+									'<li class="flex items-center gap-2">' +
+									'<span class="w-5 text-right text-xs font-bold ' + (i < 3 ? "text-(--primary)" : "opacity-40") + '">' + (i + 1) + "</span>" +
+									'<a href="/posts/' + encodeURIComponent(t.slug) + '/" class="flex-1 min-w-0 truncate hover:opacity-80 transition">' + esc(title) + "</a>" +
+									'<span class="w-24 md:w-40 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden shrink-0"><span class="block h-full rounded-full bg-(--primary)" style="width:' + w + '%"></span></span>' +
+									'<span class="w-12 text-right text-xs opacity-60 shrink-0">' + Number(t.count).toLocaleString() + "</span>" +
+									"</li>"
+								);
+							})
+							.join("")
+					: '<li class="opacity-50 text-xs">暂无阅读数据</li>';
+			}
+			function isDeletedSlug(slug) {
+				var p = allPosts.find(function (x) { return x.slug === slug; });
+				return p && p.deleted;
+			}
+			function fetchStats() {
+				fetch("/api/admin/stats")
+					.then(function (r) { return r.json(); })
+					.then(function (d) {
+						if (d && typeof d.totalViews !== "undefined") renderDash(d);
+					})
+					.catch(function () {});
+			}
+			var backupBtn = document.getElementById("dash-backup-btn");
+			backupBtn.addEventListener("click", function () {
+				backupBtn.disabled = true;
+				backupBtn.style.opacity = "0.5";
+				var msg = document.getElementById("dash-backup-msg");
+				msg.classList.remove("hidden");
+				msg.textContent = "备份中…";
+				fetch("/api/admin/backup", { method: "POST" })
+					.then(function (r) { return r.json(); })
+					.then(function (d) {
+						if (d && d.ok) {
+							msg.textContent = "✓ 已备份 " + d.key.replace("backup/", "") + "（" + (d.size / 1024).toFixed(1) + " KB）";
+							msg.classList.remove("text-red-500");
+						} else {
+							msg.textContent = "✗ " + ((d && d.error) || "备份失败");
+							msg.classList.add("text-red-500");
+						}
+					})
+					.catch(function () {
+						msg.textContent = "✗ 网络错误，请重试";
+						msg.classList.add("text-red-500");
+					})
+					.finally(function () {
+						backupBtn.disabled = false;
+						backupBtn.style.opacity = "";
+					});
+			});
+
 			function load() {
 				Promise.all([
 					fetch("/api/admin/posts").then(function (r) {
@@ -220,6 +318,10 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 						if (postsRes.ok && postsRes.d.posts) {
 							document.getElementById("manage-gate").classList.add("hidden");
 							allPosts = postsRes.d.posts;
+							titleMap = {};
+							allPosts.forEach(function (p) {
+								titleMap[p.slug] = p.title;
+							});
 							(viewsRes.views || []).forEach(function (v) {
 								viewMap[v.slug] = v.count;
 							});
@@ -228,6 +330,7 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 								return (viewMap[b.slug] || 0) - (viewMap[a.slug] || 0);
 							});
 							applyFilter();
+							fetchStats();
 						} else if (postsRes.d && postsRes.d.error === "服务器未配置 GitHub 令牌") {
 							document.getElementById("manage-loading").classList.add("hidden");
 							showError("⚠️ 服务器尚未配置 GitHub 令牌，隐藏/删除功能不可用。");
@@ -352,6 +455,7 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 				.then(function (d) {
 					if (d && d.user && d.user.isAdmin) {
 						document.getElementById("manage-gate").classList.add("hidden");
+						document.getElementById("manage-dash").classList.remove("hidden");
 						document.getElementById("manage-toolbar").classList.remove("hidden");
 						document.getElementById("manage-announce").classList.remove("hidden");
 						document.getElementById("manage-loading").classList.remove("hidden");

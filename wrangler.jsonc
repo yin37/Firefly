@@ -21,6 +21,15 @@
 			"database_id": "fd1bfb69-b935-469e-ac0d-233e0d38b296"
 		}
 	],
+	"kv_namespaces": [
+		{
+			"binding": "BACKUPS",
+			"id": "dc67d08326c845238a219a7050b509b4"
+		}
+	],
+	"triggers": {
+		"crons": ["0 21 * * *"]
+	},
 	"vars": {
 		"ADMIN_EMAILS": "2896068923@qq.com",
 		"GITHUB_REPO": "yin37/Firefly",

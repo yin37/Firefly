@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS post_views (
 	count INTEGER NOT NULL DEFAULT 0
 );
 
+-- 每日全站阅读量（按北京时间日期，一行一天），仪表盘"今日阅读"与趋势图用
+CREATE TABLE IF NOT EXISTS daily_views (
+	day TEXT PRIMARY KEY,
+	count INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS site_config (
 	key TEXT PRIMARY KEY,
 	value TEXT NOT NULL,

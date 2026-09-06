@@ -6,6 +6,7 @@
 interface Env {
 	DB: any;
 	ASSETS: { fetch: (req: Request) => Promise<Response> };
+	BACKUPS?: any; // KV 存储绑定：数据库每日备份（put/list/delete 子集，兼容 R2 接口）
 	ADMIN_EMAILS: string;
 	PRIVATE_PASSWORD: string;
 	GH_TOKEN?: string;
@@ -16,12 +17,23 @@ interface Env {
 const COOKIE = "ff_session";
 const SESSION_DAYS = 30;
 const ITERATIONS = 100000;
+const BACKUP_KEEP_DAYS = 30;
 
 function json(data: any, status = 200, headers: Record<string, string> = {}) {
 	return new Response(JSON.stringify(data), {
 		status,
 		headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
 	});
+}
+
+// 北京时间日期（YYYY-MM-DD），每日阅读统计用
+function beijingDay(): string {
+	return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
+}
+
+// n 天前的北京时间日期，备份保留期判断用
+function daysAgoDay(n: number): string {
+	return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date(Date.now() - n * 86400000));
 }
 
 function hex(buf: Uint8Array): string {
@@ -260,6 +272,48 @@ function canManagePost(user: { email: string; isAdmin: boolean }, authorEmail: s
 	if (user.isAdmin) return true;
 	const a = (authorEmail || "").trim().toLowerCase();
 	return a !== "" && a === user.email.toLowerCase();
+}
+
+// ---- 数据库备份：把 D1 全部表导出为 SQL 文本，存进 R2，保留最近 30 天 ----
+async function dumpDbToSql(env: Env): Promise<string> {
+	const tablesRes: any = await env.DB.prepare(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`,
+	).all();
+	const tables = (tablesRes.results || []).map((r: any) => String(r.name));
+	const parts: string[] = [`-- firefly-users backup ${new Date().toISOString()}`, "-- restore: wrangler d1 execute firefly-users --remote --file <this-file>"];
+	for (const t of tables) {
+		const schemaRow: any = await env.DB.prepare(`SELECT sql FROM sqlite_master WHERE name = ?1`).bind(t).first();
+		if (schemaRow?.sql) parts.push(`DROP TABLE IF EXISTS ${t};`, `${schemaRow.sql};`);
+		const { results } = await env.DB.prepare(`SELECT * FROM ${t}`).all();
+		for (const row of results || []) {
+			const cols = Object.keys(row as any);
+			const vals = cols.map((c) => {
+				const v = (row as any)[c];
+				if (v === null || v === undefined) return "NULL";
+				if (typeof v === "number") return String(v);
+				return `'${String(v).replace(/'/g, "''")}'`;
+			});
+			parts.push(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${vals.join(", ")});`);
+		}
+	}
+	return parts.join("\n") + "\n";
+}
+
+async function doBackup(env: Env): Promise<{ key: string; size: number }> {
+	const sql = await dumpDbToSql(env);
+	const key = `backup/${beijingDay()}.sql`;
+	await env.BACKUPS.put(key, sql);
+	// 清理超过保留期的旧备份（备份键名格式 backup/YYYY-MM-DD.sql，按日期字符串比较）
+	try {
+		const cutoffDay = daysAgoDay(BACKUP_KEEP_DAYS);
+		const list = await env.BACKUPS.list({ prefix: "backup/" });
+		const keys = (list.keys || list.objects || []).map((k: any) => k.name || k.key);
+		for (const key of keys) {
+			const day = String(key).replace("backup/", "").replace(".sql", "");
+			if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < cutoffDay) await env.BACKUPS.delete(key);
+		}
+	} catch {}
+	return { key, size: sql.length };
 }
 
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
@@ -557,6 +611,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 			)
 				.bind(slug)
 				.run();
+			// 每日阅读计数（统计失败不影响主计数）
+			try {
+				await env.DB.prepare(
+					`INSERT INTO daily_views (day, count) VALUES (?1, 1) ON CONFLICT(day) DO UPDATE SET count = count + 1`,
+				)
+					.bind(beijingDay())
+					.run();
+			} catch {}
 			const row: any = await env.DB.prepare(`SELECT count FROM post_views WHERE slug = ?1`).bind(slug).first();
 			return json({ ok: true, count: row?.count ?? 1 });
 		} catch {
@@ -589,6 +651,53 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 		if (!user || !user.isAdmin) return json({ error: "仅管理员" }, 403);
 		const { results } = await env.DB.prepare(`SELECT slug, count FROM post_views ORDER BY count DESC`).all();
 		return json({ views: results || [] });
+	}
+
+	// ---- 数据仪表盘（仅管理员）：总阅读 / 今日阅读 / 热度 Top10 ----
+	if (path === "/api/admin/stats" && method === "GET") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员" }, 403);
+		try {
+			const totalRow: any = await env.DB.prepare(`SELECT COALESCE(SUM(count), 0) AS t FROM post_views`).first();
+			const today = beijingDay();
+			const todayRow: any = await env.DB.prepare(`SELECT count FROM daily_views WHERE day = ?1`).bind(today).first();
+			const { results } = await env.DB.prepare(`SELECT slug, count FROM post_views ORDER BY count DESC LIMIT 10`).all();
+			return json({
+				totalViews: totalRow?.t || 0,
+				todayViews: todayRow?.count || 0,
+				today,
+				top: results || [],
+			});
+		} catch {
+			return json({ error: "统计查询失败" }, 500);
+		}
+	}
+
+	// ---- 数据库备份：手动触发一次（仅管理员） ----
+	if (path === "/api/admin/backup" && method === "POST") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员" }, 403);
+		if (!env.BACKUPS) return json({ error: "未配置备份存储桶" }, 500);
+		try {
+			const r = await doBackup(env);
+			return json({ ok: true, key: r.key, size: r.size, at: new Date().toISOString() });
+		} catch {
+			return json({ error: "备份失败" }, 500);
+		}
+	}
+
+	// ---- 数据库备份：查看备份列表（仅管理员） ----
+	if (path === "/api/admin/backup" && method === "GET") {
+		const user = await getSessionUser(env, request);
+		if (!user || !user.isAdmin) return json({ error: "仅管理员" }, 403);
+		if (!env.BACKUPS) return json({ error: "未配置备份存储桶" }, 500);
+		try {
+			const list = await env.BACKUPS.list({ prefix: "backup/" });
+			const keys = (list.keys || list.objects || []).map((k: any) => k.name || k.key);
+			return json({ keys });
+		} catch {
+			return json({ error: "读取备份列表失败" }, 500);
+		}
 	}
 
 	// ---- 公告：读取（公开） ----
@@ -643,5 +752,12 @@ export default {
 			}
 		}
 		return env.ASSETS.fetch(request);
+	},
+
+	// 定时任务：每天北京时间 05:00 自动备份数据库到 R2
+	async scheduled(_event: any, env: Env, _ctx: any): Promise<void> {
+		try {
+			if (env.BACKUPS) await doBackup(env);
+		} catch {}
 	},
 };
