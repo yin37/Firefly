@@ -57,6 +57,13 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 					<p id="dash-backup-msg" class="hidden text-[11px] mt-1 leading-snug"></p>
 				</div>
 			</div>
+			<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4 flex flex-wrap items-center gap-3">
+				<div class="flex-1 min-w-48">
+					<div class="text-sm font-bold">💻 本地管理后台</div>
+					<div class="text-[11px] opacity-40 leading-snug mt-0.5">在这台电脑上点击可一键启动本地编辑器并打开管理页（手机或其他电脑上点击无效）。首次点击会弹窗询问，选「打开」即可。</div>
+				</div>
+				<a href="fireflyadmin://open" class="rounded-lg bg-(--btn-regular-bg) hover:bg-(--btn-regular-bg-hover) px-4 py-2 text-xs font-medium transition shrink-0">启动并打开</a>
+			</div>
 			<div class="rounded-2xl border border-(--line-divider) bg-(--page-bg) p-4">
 				<div class="text-sm font-bold mb-2">🔥 热度 Top 10</div>
 				<ol id="dash-top" class="flex flex-col gap-1.5 text-sm"></ol>

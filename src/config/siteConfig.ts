@@ -40,7 +40,7 @@ const pages = resolvePageToggles({
 
 export const siteConfig: SiteConfig = {
 	// 站点标题
-	title: "yin37 的博客",
+	title: "yin 的博客",
 
 	// 站点副标题
 	subtitle: "记录与分享",
